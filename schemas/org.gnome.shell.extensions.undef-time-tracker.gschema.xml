@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+    <schema id="org.gnome.shell.extensions.undef-time-tracker" path="/org/gnome/shell/extensions/undef-time-tracker/">
+        <key name="host" type="s">
+            <default>"<![CDATA[http://example.com]]>"</default>
+            <summary>Host</summary>
+            <description>URL pointing to your redmine installation</description>
+        </key>
+        <key name="key" type="s">
+            <default>""</default>
+            <summary>API Key</summary>
+            <description>Database name</description>
+        </key>
+        <key name="filter-assigned-to-me" type="b">
+            <default>false</default>
+            <summary>Show only my issues</summary>
+            <description>Filter issues to show only those assigned to you</description>
+        </key>
+    </schema>
+</schemalist>
