@@ -7,7 +7,6 @@ const Tweener = imports.ui.tweener;
 const Soup = imports.gi.Soup;
 const Pango = imports.gi.Pango;
 
-
 const Lang = imports.lang;
 
 const PanelMenu = imports.ui.panelMenu;
@@ -63,7 +62,7 @@ const TimeTrackerStatusIcon = new Lang.Class({
          */
 
         this.add_child(new St.Label({
-            text: 'idle',
+            text: '---',
             y_expand: true,
             y_align: Clutter.ActorAlign.CENTER
         }));
@@ -71,7 +70,7 @@ const TimeTrackerStatusIcon = new Lang.Class({
 });
 
 const TimeTrackerStateSwitch = new Lang.Class({
-    Name: 'OpenErpStateSwitch',
+    Name: 'TrackingStateSwitch',
     Extends: PopupMenu.PopupSwitchMenuItem,
 
     _init: function(client) {
@@ -125,18 +124,20 @@ function _showHello() {
 /*****************************************************************************************************************************************/
 
 
-const TaskMenuItem = new Lang.Class({
-    Name: 'TaskMenuItem',
+const IssueMenuItem = new Lang.Class({
+    Name: 'IssueMenuItem',
     Extends: PopupMenu.PopupMenuItem,
 
-    _init: function(client, index) {
+    _init: function(id, name) {
         this.parent("");
+
+        this.id = id;
+        this.title = name;
 
         let text = this.label.clutter_text;
         text.max_length = 60;
         text.ellipsize = Pango.EllipsizeMode.END;
-        this.label.set_text("subitem");
-
+        this.label.set_text(this.title);
 
         this.actor.connect('key-press-event', function(actor, event) {
             let symbol = event.get_key_symbol();
@@ -157,28 +158,62 @@ const TaskMenuItem = new Lang.Class({
 });
 
 
+
 const ProjectMenuItem = new Lang.Class({
     Name: 'ProjectMenuItem',
     Extends: PopupMenu.PopupSubMenuMenuItem,
 
-    _init: function(client, index) {
+    _init: function(id, name) {
         this.parent("");
+
+        this.id = id;
+        this.title = name;
+
+        this.settings = convenience.getSettings();
 
         let text = this.label.clutter_text;
         text.max_length = 60;
         text.ellipsize = Pango.EllipsizeMode.END;
-        this.label.set_text("PROJECT");
+        this.label.set_text(this.title);
 
-        this.actor.connect('key-press-event', function(actor, event) {
-            let symbol = event.get_key_symbol();
-            if (symbol == Clutter.KEY_BackSpace || symbol == Clutter.KEY_Delete) {
-                //client.delete(index, null);
-                return true;
+        this.tasks = [];
+
+        this.reload();
+    },
+
+    reload: function(){
+        for(let i=0; i<this.tasks.length; i++){
+            this.removeMenuItem(this.tasks[i]);
+        }
+
+        this.tasks = [];
+
+        let _this = this;
+
+        let data = {};
+        data["project_id"] = this.id;
+        //check for filter
+        if(this.settings.get_boolean("filter-assigned-to-me"))
+            data['assigned_to_id'] = 'me';
+
+        let url = new Url('issues.json', data);
+        let request = Soup.Message.new('GET',url.toString());
+        session.queue_message(request, function() {
+            let json = request.response_body.data;
+            let issues = JSON.parse(json)['issues'];
+            for(let i=0;i<issues.length;i++){
+                let issue = issues[i];
+                let issueItem = new IssueMenuItem(parseInt(issue['id']), issue['subject']);
+                _this.tasks.push(issueItem);
+                _this.menu.addMenuItem(issueItem);
             }
-            return false;
-        });
 
-        //this.actor.add(new GPasteDeleteMenuItemPart(client, index), { expand: true, x_align: St.Align.END });
+            if(issues.length == 0){
+                let empty = new PopupMenu.PopupMenuItem();
+                _this.tasks.push(empty);
+                _this.menu.addMenuItem(empty);
+            }
+        });
     },
 
     setText: function(text) {
@@ -202,21 +237,35 @@ const TimeTrackIndicator = new Lang.Class({
 
         this.menu.addMenuItem(new TimeTrackerStateSwitch(null));
 
-
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-        let url = new Url('projects.xml');
-        log(url.toString());
+        this.projects = [];
+
+        this.reload();
+    },
+
+    reload: function(){
+
+        for(let i=0; i<this.projects.length; i++){
+            this.removeMenuItem(this.projects[i]);
+        }
+
+        this.projects = [];
+
+        let _this = this;
+
+        let url = new Url('projects.json');
         let request = Soup.Message.new('GET',url.toString());
         session.queue_message(request, function() {
             let json = request.response_body.data;
-            log(json);
-            for(let i=0;i<10;i++){
-                this.menu.addMenuItem(new ProjectMenuItem());
+            let projects = JSON.parse(json)['projects'];
+            for(let i=0;i<projects.length;i++){
+                let project = projects[i];
+                let projectItem = new ProjectMenuItem(parseInt(project['id']), project['name']);
+                _this.projects.push(projectItem);
+                _this.menu.addMenuItem(projectItem);
             }
         });
-
-
     },
 
     shutdown: function() {
