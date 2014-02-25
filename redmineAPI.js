@@ -114,3 +114,13 @@ function updateTimeEntry(timeEntry, callback){
 
     });
 }
+
+function deleteTimeEntry(timeEntry, callback){
+    let url = new Url('time_entries/'+timeEntry["id"]+'.json');
+    let request = Soup.Message.new('DELETE', url.toString());
+    //request.set_request("application/json", Soup.MemoryUse.COPY, dataStr, dataStr.length);
+    session.queue_message(request, function() {
+        log(request.response_body.data);
+        callback();
+    });
+}

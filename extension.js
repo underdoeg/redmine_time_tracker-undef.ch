@@ -261,6 +261,7 @@ const TimeTracker = new Lang.Class({
     },
 
     reload: function(){
+        this.stopTracking();
         //load user data first and then the rest
         API.getCurrentUser(function(user){
             timeTracker.user = user;
@@ -281,6 +282,7 @@ const TimeTracker = new Lang.Class({
         this.projectArrowItems = [];
 
         this.projects = projects;
+
         for(let i=0; i<this.projects.length; i++){
             let project = this.projects[i];
             let menuItem = new Elements.Button(null, project["name"], {style_class: 'time-tracker-project-btn'});
@@ -466,6 +468,13 @@ const TimeTracker = new Lang.Class({
         if(!this.isTracking)
             return;
 
+        //check if the timeEntry is long enough or kill otherwise
+        if(this.activeTimeEntry["hours"] < .01)
+            API.deleteTimeEntry(this.activeTimeEntry, function(){});
+        else
+            API.updateTimeEntry(timeTracker.activeTimeEntry, function(){});
+
+        //reset gui items
         this.activeTimeEntry = null;
 
         this.indicator.label.text = "---";
@@ -509,7 +518,7 @@ const TimeTracker = new Lang.Class({
         let timePassed =getTimeSince(timeTracker.trackingBeginTime);
         timeTracker.activeTimeEntry["hours"] = timePassed["hours"];
 
-        API.updateTimeEntry(timeTracker.activeTimeEntry, function(timeEntry){timeTracker.setActiveTimeEntry(timeEntry)});
+        API.updateTimeEntry(timeTracker.activeTimeEntry, function(){});
 
         return true;
     },
