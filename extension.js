@@ -184,7 +184,7 @@ const TimeTracker = new Lang.Class({
 
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////build the bottom pane
-        let refreshBtn = new Elements.Button('refresh-symbolic', null, {style_class: 'time-tracker-refresh-btn'});
+        let refreshBtn = new Elements.Button('view-refresh-symbolic', null, {style_class: 'time-tracker-refresh-btn'});
         refreshBtn.connect('activate', Lang.bind(this, function() {
             timeTracker.reload();
         }));
@@ -203,7 +203,7 @@ const TimeTracker = new Lang.Class({
         let refreshSpacer = new St.Label({text: ' '});
         bottomPane.add(refreshSpacer, {expand: true});
 
-        let prefBtn = new Elements.Button('control-center-alt-symbolic', null, {style_class: 'time-tracker-settings-btn'});
+        let prefBtn = new Elements.Button('preferences-system-symbolic', null, {style_class: 'time-tracker-settings-btn'});
         prefBtn.connect('activate', Lang.bind(this, function() {
             Main.Util.trySpawnCommandLine("gnome-shell-extension-prefs time_tracker@undef.ch");
             timeTracker.menu.close();
