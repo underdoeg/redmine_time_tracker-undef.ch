@@ -469,10 +469,10 @@ const TimeTracker = new Lang.Class({
             return;
 
         //check if the timeEntry is long enough or kill otherwise
-        if(this.activeTimeEntry["hours"] < .01)
+        if(this.activeTimeEntry["hours"] < 0.01)
             API.deleteTimeEntry(this.activeTimeEntry, function(){});
         else
-            API.updateTimeEntry(timeTracker.activeTimeEntry, function(){});
+            API.updateTimeEntry(this.activeTimeEntry, function(){});
 
         //reset gui items
         this.activeTimeEntry = null;
@@ -500,7 +500,9 @@ const TimeTracker = new Lang.Class({
         if(!timeTracker.trackingBeginTime)
             return true;
 
-        timeTracker.indicator.time.text = getTimeString(getTimeSince(timeTracker.trackingBeginTime));
+        let elapsed = getTimeSince(timeTracker.trackingBeginTime);
+        timeTracker.activeTimeEntry["hours"] = elapsed["hours"];
+        timeTracker.indicator.time.text = getTimeString(elapsed);
 
         return true;
     },
