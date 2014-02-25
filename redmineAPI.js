@@ -36,6 +36,15 @@ Url.prototype = {
 
 }
 
+function getCurrentUser(callback){
+    let url = new Url('users/current.json');
+    let request = Soup.Message.new('GET',url.toString());
+    session.queue_message(request, function() {
+        let user = JSON.parse(request.response_body.data)['user'];
+        callback(user);
+    })
+}
+
 function getAllProjects(callback){
     let url = new Url('projects.json');
     let request = Soup.Message.new('GET',url.toString());
@@ -81,4 +90,27 @@ function getAllActivities(callback){
         let activities = JSON.parse(request.response_body.data)['time_entry_activities'];
         callback(activities);
     })
+}
+
+function createTimeEntry(issueId, activityId, callback){
+    let url = new Url('time_entries.json');
+    let data = {'time_entry':{issue_id:issueId, activity_id: activityId, user_id: 'me', hours: 0}};
+    let dataStr = JSON.stringify(data);
+    let request = Soup.Message.new('POST', url.toString());
+    request.set_request("application/json", Soup.MemoryUse.COPY, dataStr, dataStr.length);
+    session.queue_message(request, function() {
+        let timeEntry = JSON.parse(request.response_body.data)['time_entry'];
+        callback(timeEntry);
+    });
+}
+
+function updateTimeEntry(timeEntry, callback){
+    let url = new Url('time_entries/'+timeEntry["id"]+'.json');
+    let data = {'time_entry':{issue_id:timeEntry["issue"]["id"], activity_id: timeEntry["activity"]["id"], hours: timeEntry["hours"]}};
+    let dataStr = JSON.stringify(data);
+    let request = Soup.Message.new('PUT', url.toString());
+    request.set_request("application/json", Soup.MemoryUse.COPY, dataStr, dataStr.length);
+    session.queue_message(request, function() {
+
+    });
 }
