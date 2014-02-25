@@ -28,7 +28,7 @@ const OpenErpSettingsWidget = new GObject.Class({
         this.add(vbox);
 
         label = new Gtk.Label();
-        label.set_markup("Host");
+        label.set_markup("Host (with / at end of url)");
         label.set_alignment(0, 0.5);
         vbox.add(label);
 
@@ -63,6 +63,12 @@ const OpenErpSettingsWidget = new GObject.Class({
         vbox.add(check);
         check.connect('toggled', Lang.bind(this, this._myIssuesFilterChanged));
 
+
+        check = new Gtk.CheckButton({label:'Place in center'});
+        check.active = this._settings.get_boolean("place-center")
+        vbox.add(check);
+        check.connect('toggled', Lang.bind(this, this._placeCenterChanged));
+
     },
 
     _hostChanged: function(widget) {
@@ -84,6 +90,11 @@ const OpenErpSettingsWidget = new GObject.Class({
     _myIssuesFilterChanged: function(widget) {
         let val = widget.active;
         this._settings.set_boolean("filter-assigned-to-me", val)
+    },
+
+    _placeCenterChanged: function(widget) {
+        let val = widget.active;
+        this._settings.set_boolean("place-center", val)
     }
 
 });

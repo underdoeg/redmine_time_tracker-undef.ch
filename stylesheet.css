@@ -1,9 +1,13 @@
+/*
+.time-tracker-menu-bottom-pane, .time-tracker-menu-top-pane{
+    padding: 0px 20px 0px 20px;
+}
 
-.helloworld-label {
-    font-size: 36px;
-    font-weight: bold;
-    color: #ffffff;
-    background-color: rgba(10,10,10,0.7);
-    border-radius: 5px;
-    padding: .5em;
+.time-tracker-refresh-btn, .time-tracker-browser-btn, .time-tracker-settings-btn{
+    padding: 3px;
+}
+*/
+
+.time-tracker-active-issue{
+    padding-top: 8px;
 }

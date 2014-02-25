@@ -16,5 +16,11 @@
             <summary>Show only my issues</summary>
             <description>Filter issues to show only those assigned to you</description>
         </key>
+
+        <key name="place-center" type="b">
+            <default>false</default>
+            <summary>Place in Center</summary>
+            <description>Place extension in center of status area</description>
+        </key>
     </schema>
 </schemalist>

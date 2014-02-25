@@ -1,290 +1,234 @@
-
-const Clutter = imports.gi.Clutter;
-
+/**
+ * Created by phwhitfield on 2/25/14.
+ */
 const St = imports.gi.St;
-const Main = imports.ui.main;
-const Tweener = imports.ui.tweener;
-const Soup = imports.gi.Soup;
-const Pango = imports.gi.Pango;
-
 const Lang = imports.lang;
-
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
+const Main = imports.ui.main;
+const Clutter = imports.gi.Clutter;
+const Gio = imports.gi.Gio;
+const Separator = imports.ui.separator;
+const Atk = imports.gi.Atk;
 
-const Me = imports.misc.extensionUtils.getCurrentExtension();
+
+const ExtensionUtils = imports.misc.extensionUtils;
+const Me = ExtensionUtils.getCurrentExtension();
+const API = Me.imports.redmineAPI;
+const Elements = Me.imports.elements;
 const convenience = Me.imports.convenience;
 
-const session = new Soup.SessionAsync();
-Soup.Session.prototype.add_feature.call(session, new Soup.ProxyResolverDefault());
+function _onVertSepRepaint (area)
+{
+    let cr = area.get_context();
+    let themeNode = area.get_theme_node();
+    let [width, height] = area.get_surface_size();
+    let stippleColor = themeNode.get_color('-stipple-color');
+    let stippleWidth = themeNode.get_length('-stipple-width');
+    let x = Math.floor(width/2) + 0.5;
+    cr.moveTo(x, 0);
+    cr.lineTo(x, height);
+    Clutter.cairo_set_source_color(cr, stippleColor);
+    cr.setDash([1, 3], 1); // Hard-code for now
+    cr.setLineWidth(stippleWidth);
+    cr.stroke();
+    cr.$dispose();
+};
 
-//URL used to make API calls
-function Url(path,data){
-    this._init(path,data);
-}
+//the global TimeTracker object
+var timeTracker;
+/************************* CONTROLLER **********************************/
 
-Url.prototype = {
-    _init: function(path,data) {
-        this._settings = convenience.getSettings();
-        this._path = path;
-        this._data = data;
-    },
-
-    toString: function() {
-        let url = this._settings.get_string('host') + this._path + '?key=' + this._settings.get_string('key');
-        let params = [];
-        for(let param in this._data)
-            params.push(param + "=" + this._data[param]);
-
-        if(params.length > 0){
-            url = url + '&' + params.join('&');
-        }
-        return url;
-    }
-
-}
-
-
-// HEADER
-
-const TimeTrackerStatusIcon = new Lang.Class({
-    Name: 'TimeTrackerStatusIcon',
+const TimeTrackerIndicator = new Lang.Class({
+    Name: 'TimeTrackerIndicator',
     Extends: St.BoxLayout,
 
     _init: function() {
-        this.parent({ style_class: 'panel-status-menu-box' });
+        this.parent({});
 
-        /*
-         this.add_child(new St.Icon({
-         icon_name: 'edit-paste-symbolic',
-         style_class: 'system-status-icon'
-         }));
-         */
+        this.icon = new St.Icon({
+            icon_name: 'media-playback-pause-symbolic',
+            style_class: 'system-status-icon'
+        });
 
-        this.add_child(new St.Label({
+        this.add_child(this.icon);
+
+        this.label = new St.Label({
             text: '---',
             y_expand: true,
             y_align: Clutter.ActorAlign.CENTER
-        }));
-    }
-});
-
-const TimeTrackerStateSwitch = new Lang.Class({
-    Name: 'TrackingStateSwitch',
-    Extends: PopupMenu.PopupSwitchMenuItem,
-
-    _init: function(client) {
-        this.parent(_("track"), false);
-
-        this._fromDaemon = false;
-
-        this.connect('toggled', Lang.bind(this, function() {
-
-        }));
-    }
-});
-
-
-function _showHello() {
-
-    let url = new Url('/issues.json',{'assigned_to_id': 'me'});
-    let request = Soup.Message.new('GET', url.toString());
-    session.queue_message(request, function() {
-
-        let json = request.response_body.data;
-        let issues = JSON.parse(json)['issues'];
-        textContent = "";
-        for (let i = 0; i < issues.length; i ++){
-            let issue = issues[i];
-            textContent += issue['subject'];
-        }
-
-        if (!text) {
-            text = new St.Label({ style_class: 'helloworld-label', text: textContent });
-            Main.uiGroup.add_actor(text);
-        }
-
-        text.opacity = 255;
-
-        let monitor = Main.layoutManager.primaryMonitor;
-
-        text.set_position(Math.floor(monitor.width / 2 - text.width / 2),
-            Math.floor(monitor.height / 2 - text.height / 2));
-
-        Tweener.addTween(text,
-            { opacity: 0,
-                time: 2,
-                transition: 'easeOutQuad',
-                onComplete: _hideHello });
-
-
-    });
-}
-
-/*****************************************************************************************************************************************/
-
-
-const IssueMenuItem = new Lang.Class({
-    Name: 'IssueMenuItem',
-    Extends: PopupMenu.PopupMenuItem,
-
-    _init: function(id, name) {
-        this.parent("");
-
-        this.id = id;
-        this.title = name;
-
-        let text = this.label.clutter_text;
-        text.max_length = 60;
-        text.ellipsize = Pango.EllipsizeMode.END;
-        this.label.set_text(this.title);
-
-        this.actor.connect('key-press-event', function(actor, event) {
-            let symbol = event.get_key_symbol();
-            if (symbol == Clutter.KEY_BackSpace || symbol == Clutter.KEY_Delete) {
-                //client.delete(index, null);
-                return true;
-            }
-            return false;
         });
 
-        //this.actor.add(new GPasteDeleteMenuItemPart(client, index), { expand: true, x_align: St.Align.END });
-    },
-
-    setText: function(text) {
-        this.label.set_text(text);
-        this.actor.show();
+        this.add_child(this.label);
     }
 });
 
+/************************* MAIN MENU CONTAINER **********************************/
 
 
-const ProjectMenuItem = new Lang.Class({
-    Name: 'ProjectMenuItem',
-    Extends: PopupMenu.PopupSubMenuMenuItem,
 
-    _init: function(id, name) {
-        this.parent("");
+/*
+const TimeTrackerMainArea = new Lang.Class({
+    Name: 'TimeTrackerMainArea',
+    Extends: PopupMenu.PopupMenu,
 
-        this.id = id;
-        this.title = name;
-
-        this.settings = convenience.getSettings();
-
-        let text = this.label.clutter_text;
-        text.max_length = 60;
-        text.ellipsize = Pango.EllipsizeMode.END;
-        this.label.set_text(this.title);
-
-        this.tasks = [];
-
-        this.reload();
-    },
-
-    reload: function(){
-        for(let i=0; i<this.tasks.length; i++){
-            this.removeMenuItem(this.tasks[i]);
-        }
-
-        this.tasks = [];
-
-        let _this = this;
-
-        let data = {};
-        data["project_id"] = this.id;
-        //check for filter
-        if(this.settings.get_boolean("filter-assigned-to-me"))
-            data['assigned_to_id'] = 'me';
-
-        let url = new Url('issues.json', data);
-        let request = Soup.Message.new('GET',url.toString());
-        session.queue_message(request, function() {
-            let json = request.response_body.data;
-            let issues = JSON.parse(json)['issues'];
-            for(let i=0;i<issues.length;i++){
-                let issue = issues[i];
-                let issueItem = new IssueMenuItem(parseInt(issue['id']), issue['subject']);
-                _this.tasks.push(issueItem);
-                _this.menu.addMenuItem(issueItem);
-            }
-
-            if(issues.length == 0){
-                let empty = new PopupMenu.PopupMenuItem();
-                _this.tasks.push(empty);
-                _this.menu.addMenuItem(empty);
-            }
-        });
-    },
-
-    setText: function(text) {
-        this.label.set_text(text);
-        this.actor.show();
+    init: function(){
+        this.parent(this.actor, menuAlignment, St.Side.TOP, 0);
     }
 });
+*/
 
-/*****************************************************************************************************************************************/
-
-const TimeTrackIndicator = new Lang.Class({
-    Name: 'TimeTrackIndicator',
+/************************* CONTROLLER **********************************/
+const TimeTracker = new Lang.Class({
+    Name: 'TimeTracker',
     Extends: PanelMenu.Button,
 
-    _init: function() {
-        this.parent(0.0, "TimeTracker");
-
+    _init: function(){
         this.settings = convenience.getSettings();
 
-        this.actor.add_child(new TimeTrackerStatusIcon());
+        let menuAlignement = 0;
+        if(this.settings.get_boolean('place-center'))
+            menuAlignement = 0.5;
 
-        this.menu.addMenuItem(new TimeTrackerStateSwitch(null));
+        this.parent(menuAlignement, "TimeTracker");
 
-        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        //create indicator
+        this.indicator = new TimeTrackerIndicator();
+        this.actor.add_child(this.indicator);
 
-        this.projects = [];
+        //create a section for the main box
+        let section = new PopupMenu.PopupMenuSection();
 
+        this.mainBox = new St.BoxLayout({ name: 'timeTrackerMainBox', style_class: 'time-tracker-menu-box', vertical:true });
+        let topPane = new St.BoxLayout({ style_class: 'time-tracker-menu-top-pane' });
+        let middlePane = new St.BoxLayout({ style_class: 'time-tracker-menu-middle-pane' });
+        let bottomPane = new St.BoxLayout({ style_class: 'time-tracker-menu-bottom-pane' });
+
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////build the top pane
+        //this.activeIssueLabel = new St.Label({text: 'No issue selected!'});
+        this.activeIssueLabel = new PopupMenu.PopupMenuItem("\u25BE No issue selected \u25BE", { style_class: 'time-tracker-active-issue'});
+        topPane.add(this.activeIssueLabel.actor, {expand: true, x_align:St.Align.START});
+
+        //this.trackingSwitch = new PopupMenu.Switch(true);
+        //topPane.add(this.trackingSwitch.actor, {expand: false, x_align:St.Align.END, y_align:St.Align.END});
+        this.trackingSwitch = new PopupMenu.PopupSwitchMenuItem("", false, {});
+        this.trackingSwitch.label.hide();
+        topPane.add(this.trackingSwitch.actor, {expand: false, x_align:St.Align.END});
+
+
+        ///////////////////////////////////////////////////////////////////////////////////////////////////build the middle pane
+        //this.projectsMenu = new St.ScrollView({ x_fill: true, y_fill: false, y_align: St.Align.START, style_class: 'time-tracker-projects-container' });
+
+        this.projectsMenu = new PopupMenu.PopupMenuSection();
+        middlePane.add(this.projectsMenu.actor, {expand: true, x_align:St.Align.START});
+
+        let separator = new St.DrawingArea({ style_class: 'calendar-vertical-separator', pseudo_class: 'highlighted' });
+        separator.connect('repaint', Lang.bind(this, _onVertSepRepaint));
+        middlePane.add(separator);
+
+        this.issuesMenu = new PopupMenu.PopupMenuSection();
+        middlePane.add(this.issuesMenu.actor, {expand: true, x_align:St.Align.START});
+
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////build the bottom pane
+        let refreshBtn = new Elements.Button('refresh-symbolic', null, 'time-tracker-refresh-btn');
+        refreshBtn.connect('activate', Lang.bind(this, function() {
+
+        }));
+        bottomPane.add(refreshBtn.actor);
+
+        let browserBtn = new Elements.Button('network-server-symbolic', null, 'time-tracker-browser-btn');
+        browserBtn.connect('activate', Lang.bind(this, function() {
+            Gio.app_info_launch_default_for_uri(
+                timeTracker.settings.get_string('host'),
+                global.create_app_launch_context()
+            );
+            timeTracker.menu.close();
+        }));
+        bottomPane.add(browserBtn.actor, {expand: false, x_align:St.Align.START});
+
+        let refreshSpacer = new St.Label({text: ' '});
+        bottomPane.add(refreshSpacer, {expand: true});
+
+        let prefBtn = new Elements.Button('control-center-alt-symbolic', null, 'time-tracker-settings-btn');
+        prefBtn.connect('activate', Lang.bind(this, function() {
+            Main.Util.trySpawnCommandLine("gnome-shell-extension-prefs time_tracker@undef.ch");
+            timeTracker.menu.close();
+        }));
+        bottomPane.add(prefBtn.actor, {expand: false, x_align:St.Align.END});
+
+
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////build the menu
+        this.mainBox.add_actor(topPane, {expand: false});
+        let separator = new Separator.HorizontalSeparator({ style_class: 'popup-separator-menu-item' });
+        this.mainBox.add_actor(separator.actor);
+
+        this.mainBox.add_actor(middlePane, {expand: false, x_align:St.Align.START});
+        separator = new Separator.HorizontalSeparator({ style_class: 'popup-separator-menu-item' });
+        this.mainBox.add_actor(separator.actor);
+        this.mainBox.add_actor(bottomPane, {expand: false, x_align:St.Align.START});
+
+        section.actor.add_actor(this.mainBox);
+        this.menu.addMenuItem(section);
+
+        this.menu.actor.set_width(500);
+
+
+        //finally add to the status area
+        if(this.settings.get_boolean('place-center'))
+            Main.panel.addToStatusArea('timeTracker', this, 1, "center");
+        else
+            Main.panel.addToStatusArea('timeTracker', this);
+        //
+
+        //and now load your data
         this.reload();
     },
 
     reload: function(){
-
-        for(let i=0; i<this.projects.length; i++){
-            this.removeMenuItem(this.projects[i]);
-        }
-
         this.projects = [];
-
-        let _this = this;
-
-        let url = new Url('projects.json');
-        let request = Soup.Message.new('GET',url.toString());
-        session.queue_message(request, function() {
-            let json = request.response_body.data;
-            let projects = JSON.parse(json)['projects'];
-            for(let i=0;i<projects.length;i++){
-                let project = projects[i];
-                let projectItem = new ProjectMenuItem(parseInt(project['id']), project['name']);
-                _this.projects.push(projectItem);
-                _this.menu.addMenuItem(projectItem);
-            }
-        });
+        this.issues = [];
+        API.getAllProjects(function(projects){timeTracker.setProjectList(projects);});
     },
 
-    shutdown: function() {
-        this._onStateChanged (false);
-        this.destroy();
+    setProjectList: function(projects){
+        this.projects = projects;
+        for(let i=0; i<projects.length; i++){
+            let project = this.projects[i];
+            let item = new PopupMenu.PopupMenuItem(project["name"], {});
+            this.projectsMenu.addMenuItem(item);
+        }
     },
 
-    _onStateChanged: function (state) {
-        this._client.on_extension_state_changed(state, null);
+    loadIssues: function(projectId){
+        API.getIssuesFromProject(projectId, function(issues){timeTracker.setIssueList(issues);});
+    },
+
+    setIssueList: function(issues){
+        this.issues = issues;
+        for(let i=0; i<projects.length; i++){
+            let project = this.projects[i];
+            let item = new PopupMenu.PopupMenuItem(project["name"], {});
+            this.projectsMenu.addMenuItem(item);
+        }
+    },
+
+    destroy: function(){
+        Main.panel.statusArea.timeTracker.shutdown();
     }
 });
 
+
+/************************* ENABLE **********************************/
 function init(extension) {
 }
 
 function enable() {
-    Main.panel.addToStatusArea('timeTracker', new TimeTrackIndicator());
+    timeTracker = new TimeTracker();
 }
 
 function disable() {
-    Main.panel.statusArea.timeTracker.shutdown();
+    timeTracker.destroy();
 }
