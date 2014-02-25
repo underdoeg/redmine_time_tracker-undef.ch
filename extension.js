@@ -408,7 +408,7 @@ const TimeTracker = new Lang.Class({
     },
 
     setActiveIssue: function(issueData){
-        if(this.activeIssue && this.activeIssue["id"] == issueData["id"])
+        if(this.isTracking && this.activeIssue && this.activeIssue["id"] == issueData["id"])
             return;
 
         this.activeIssue = issueData;
