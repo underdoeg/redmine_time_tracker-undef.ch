@@ -11,3 +11,12 @@
 .time-tracker-active-issue{
     padding-top: 8px;
 }
+
+.time-tracker-active-project{
+    text-decoration: underline;
+}
+
+.time-tracker-arrow-project-btn{
+    padding-right: 5px;
+    padding-left: 0px;
+}

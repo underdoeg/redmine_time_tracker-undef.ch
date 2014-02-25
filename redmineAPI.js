@@ -73,3 +73,12 @@ function getIssuesFromProject(projectId, callback){
         callback(issues);
     })
 };
+
+function getAllActivities(callback){
+    let url = new Url('/enumerations/time_entry_activities.json');
+    let request = Soup.Message.new('GET', url.toString());
+    session.queue_message(request, function() {
+        let activities = JSON.parse(request.response_body.data)['time_entry_activities'];
+        callback(activities);
+    })
+}

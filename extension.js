@@ -110,35 +110,38 @@ const TimeTracker = new Lang.Class({
         this.activeIssueLabel = new PopupMenu.PopupMenuItem("\u25BE No issue selected \u25BE", { style_class: 'time-tracker-active-issue'});
         topPane.add(this.activeIssueLabel.actor, {expand: true, x_align:St.Align.START});
 
-        //this.trackingSwitch = new PopupMenu.Switch(true);
-        //topPane.add(this.trackingSwitch.actor, {expand: false, x_align:St.Align.END, y_align:St.Align.END});
         this.trackingSwitch = new PopupMenu.PopupSwitchMenuItem("", false, {});
         this.trackingSwitch.label.hide();
         topPane.add(this.trackingSwitch.actor, {expand: false, x_align:St.Align.END});
 
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////build the middle pane
-        //this.projectsMenu = new St.ScrollView({ x_fill: true, y_fill: false, y_align: St.Align.START, style_class: 'time-tracker-projects-container' });
-
         this.projectsMenu = new PopupMenu.PopupMenuSection();
-        middlePane.add(this.projectsMenu.actor, {expand: true, x_align:St.Align.START});
+        middlePane.add(this.projectsMenu.actor, {expand: false, x_align:St.Align.START});
+
+        this.projectsArrowMenu = new PopupMenu.PopupMenuSection();
+        middlePane.add(this.projectsArrowMenu.actor, {expand: false, x_align:St.Align.START});
 
         let separator = new St.DrawingArea({ style_class: 'calendar-vertical-separator', pseudo_class: 'highlighted' });
         separator.connect('repaint', Lang.bind(this, _onVertSepRepaint));
         middlePane.add(separator);
 
         this.issuesMenu = new PopupMenu.PopupMenuSection();
+        /*
+        this.issuesMenuScroll = new St.ScrollView({ x_fill: true, y_fill: true, y_align: St.Align.START, style_class: 'time-tracker-projects-scroll-container' });
+        this.issuesMenuScroll.add_child(this.issuesMenu.actor);
+        middlePane.add(this.issuesMenuScroll, {expand: true, x_align:St.Align.START});
+        */
         middlePane.add(this.issuesMenu.actor, {expand: true, x_align:St.Align.START});
 
-
         /////////////////////////////////////////////////////////////////////////////////////////////////////build the bottom pane
-        let refreshBtn = new Elements.Button('refresh-symbolic', null, 'time-tracker-refresh-btn');
+        let refreshBtn = new Elements.Button('refresh-symbolic', null, {style_class: 'time-tracker-refresh-btn'});
         refreshBtn.connect('activate', Lang.bind(this, function() {
 
         }));
         bottomPane.add(refreshBtn.actor);
 
-        let browserBtn = new Elements.Button('network-server-symbolic', null, 'time-tracker-browser-btn');
+        let browserBtn = new Elements.Button('network-server-symbolic', null, {style_class: 'time-tracker-browser-btn'});
         browserBtn.connect('activate', Lang.bind(this, function() {
             Gio.app_info_launch_default_for_uri(
                 timeTracker.settings.get_string('host'),
@@ -151,7 +154,7 @@ const TimeTracker = new Lang.Class({
         let refreshSpacer = new St.Label({text: ' '});
         bottomPane.add(refreshSpacer, {expand: true});
 
-        let prefBtn = new Elements.Button('control-center-alt-symbolic', null, 'time-tracker-settings-btn');
+        let prefBtn = new Elements.Button('control-center-alt-symbolic', null, {style_class: 'time-tracker-settings-btn'});
         prefBtn.connect('activate', Lang.bind(this, function() {
             Main.Util.trySpawnCommandLine("gnome-shell-extension-prefs time_tracker@undef.ch");
             timeTracker.menu.close();
@@ -173,8 +176,7 @@ const TimeTracker = new Lang.Class({
         section.actor.add_actor(this.mainBox);
         this.menu.addMenuItem(section);
 
-        this.menu.actor.set_width(500);
-
+        this.menu.actor.set_width(560);
 
         //finally add to the status area
         if(this.settings.get_boolean('place-center'))
@@ -184,37 +186,138 @@ const TimeTracker = new Lang.Class({
         //
 
         //and now load your data
+        this.projects = [];
+        this.projectMenuItems = [];
+        this.projectMenuItemsById = {};
+        this.activities = [];
+        this.activityMenuItemsById = {};
+        this.activityMenuItems = [];
+        this.issues = [];
+        this.issueMenuItems = [];
+        this.activeProjectMenuItem = null;
+        this.activeProject = null;
+        this.activeIssue = null;
+        this.activeActivity = null;
+        this.activeActivityMenuItem = null;
         this.reload();
     },
 
     reload: function(){
-        this.projects = [];
-        this.issues = [];
         API.getAllProjects(function(projects){timeTracker.setProjectList(projects);});
+        API.getAllActivities(function(activities){timeTracker.setActivitiesList(activities);});
     },
 
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
     setProjectList: function(projects){
         this.projects = projects;
-        for(let i=0; i<projects.length; i++){
+        for(let i=0; i<this.projects.length; i++){
             let project = this.projects[i];
-            let item = new PopupMenu.PopupMenuItem(project["name"], {});
-            this.projectsMenu.addMenuItem(item);
+            let menuItem = new Elements.Button(null, project["name"], {style_class: 'time-tracker-project-btn'});
+
+            //add a separate menu arrow item
+            let menuArrowItem = new Elements.Button("media-playlist-consecutive-symbolic", " ", {style_class: 'time-tracker-arrow-project-btn', reactive: false});
+            menuArrowItem._ornamentLabel.hide();
+            menuArrowItem.icon.hide();
+            menuArrowItem.actor.set_width(22);
+            menuItem.arrow = menuArrowItem;
+            menuItem.projectData = project;
+
+            //also highlite the arrow item
+            menuItem.connect('active-changed', Lang.bind(this, function(widget) {
+                if(widget.actor.has_style_pseudo_class("active"))
+                    widget.arrow.actor.add_style_pseudo_class('active');
+                else
+                    widget.arrow.actor.remove_style_pseudo_class('active');
+            }));
+
+            //bind to click event
+            menuItem.connect('activate', Lang.bind(this, function(widget) {
+                timeTracker.setActiveProject(widget.projectData);
+            }));
+            this.projectMenuItemsById[project["id"]] = menuItem;
+            this.projectsArrowMenu.addMenuItem(menuArrowItem);
+            this.projectMenuItems.push(menuItem);
+            this.projectsMenu.addMenuItem(menuItem);
         }
     },
 
+    setActiveProject: function(projectData){
+        this.activeProject = projectData;
+        this.loadIssues(projectData["id"]);
+        if(this.activeProjectMenuItem != null){
+            this.activeProjectMenuItem.arrow.icon.hide();
+        }
+        let widget = this.projectMenuItemsById[projectData["id"]];
+        if(!widget)
+            return;
+        widget.arrow.icon.show();
+        timeTracker.activeProjectMenuItem = widget;
+    },
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+    setActivitiesList: function(activities){
+        this.activities = activities;
+        for(let i=0; i<this.activities.length; i++){
+            let activity = this.activities[i];
+            let menuItem = new Elements.Button("media-playback-start-symbolic", activity["name"], {style_class: 'time-tracker-activities-btn'});
+            menuItem.activityData = activity;
+            menuItem.icon.hide();
+            this.issuesMenu.addMenuItem(menuItem);
+            this.activityMenuItemsById[activity["id"]] = menuItem;
+            this.activityMenuItems.push(menuItem);
+        }
+        let separator = new PopupMenu.PopupSeparatorMenuItem();
+        this.issuesMenu.addMenuItem(separator);
+        this.activityMenuItems.push(separator);
+    },
+
+    setActiveActivity: function(activityData){
+        this.activeA
+    },
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
     loadIssues: function(projectId){
         API.getIssuesFromProject(projectId, function(issues){timeTracker.setIssueList(issues);});
     },
 
     setIssueList: function(issues){
+        for(let i=0; i<this.issueMenuItems.length; i++){
+            this.issueMenuItems[i].destroy();
+        }
+        this.issueMenuItems = [];
+
         this.issues = issues;
-        for(let i=0; i<projects.length; i++){
-            let project = this.projects[i];
-            let item = new PopupMenu.PopupMenuItem(project["name"], {});
-            this.projectsMenu.addMenuItem(item);
+        for(let i=0; i<this.issues.length; i++){
+            let issue = this.issues[i];
+
+            //filter subproject issues
+            if(issue['project']['id'] == this.activeProject["id"]){
+                let menuItem = new PopupMenu.PopupMenuItem(issue["subject"], {});
+                menuItem.issueData = issue;
+                this.issueMenuItems.push(menuItem);
+                this.issuesMenu.addMenuItem(menuItem);
+
+                //listen for click events
+                menuItem.connect('activate', Lang.bind(this, function(widget) {
+                    timeTracker.setActiveIssue(widget.issueData);
+                }));
+            }
+        }
+
+        if(this.issues.length == 0){
+            let empty = new PopupMenu.PopupMenuItem("Nothin to do! Good boy...", {reactive:false, activate:false});
+            this.issueMenuItems.push(empty);
+            this.issuesMenu.addMenuItem(empty);
+            return;
         }
     },
 
+    setActiveIssue: function(issueData){
+        this.activeIssue = issueData;
+        this.activeIssueLabel.label.text = this.activeIssue["subject"];
+    },
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
     destroy: function(){
         Main.panel.statusArea.timeTracker.shutdown();
     }
