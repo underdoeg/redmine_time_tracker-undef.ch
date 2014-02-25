@@ -257,7 +257,7 @@ const TimeTracker = new Lang.Class({
 
         //add the timeout
         GLib.timeout_add_seconds(0, 3, this.onUpdateTimeout, this);
-        GLib.timeout_add_seconds(1, 1*60, this.onSaveTimeout, this);
+        GLib.timeout_add_seconds(1, 3*60, this.onSaveTimeout, this);
     },
 
     reload: function(){
