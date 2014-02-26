@@ -488,6 +488,9 @@ const TimeTracker = new Lang.Class({
         //set issue status
         let maxLen = 15;
         let txt = this.activeIssue["subject"];
+        if(this.settings.get_boolean('show-project-name-in-status'))
+            txt = this.activeIssue["project"]["name"];
+
         if(txt.length >maxLen){
             txt = txt.substr(0, maxLen);
             txt += "...";

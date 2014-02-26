@@ -35,5 +35,11 @@
             <description>Time in seconds</description>
         </key>
 
+        <key name="show-project-name-in-status" type="b">
+            <default>false</default>
+            <summary>show active project instead of issue</summary>
+            <description>Show the project name and not the current Issue in the status area</description>
+        </key>
+
     </schema>
 </schemalist>

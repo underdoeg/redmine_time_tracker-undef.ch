@@ -8,6 +8,8 @@ const ExtensionUtils = imports.misc.extensionUtils;
 const Me = ExtensionUtils.getCurrentExtension();
 const Convenience = Me.imports.convenience;
 
+let settings;
+
 const OpenErpSettingsWidget = new GObject.Class({
     Name: 'UndefTimeTracker.Prefs.RedmineSettings',
     GTypeName: 'RedmineSettingsWidget',
@@ -21,8 +23,9 @@ const OpenErpSettingsWidget = new GObject.Class({
 
         this._settings = Convenience.getSettings();
 
-        let vbox, label, entry, check;
+        let vbox, label, entry, check, spin;
 
+        settings = this._settings;
 
         vbox = new Gtk.VBox({margin: this.margin});
         this.add(vbox);
@@ -57,6 +60,46 @@ const OpenErpSettingsWidget = new GObject.Class({
         label.set_alignment(0, 0.5);
         vbox.add(label);
 
+        label = new Gtk.Label();
+        label.set_markup("Save interval in seconds");
+        label.set_alignment(0, 0.5);
+        vbox.add(label);
+
+        spin = Gtk.SpinButton.new_with_range(
+            60,
+            1800,
+            30)
+        spin.set_value(settings.get_int("save-interval"));
+        spin.connect('notify::value', function(spin) {
+            settings.set_int("save-interval", spin.get_value_as_int());
+        });
+        vbox.add(spin);
+
+        label = new Gtk.Label();
+        //label.set_markup("Show only my issues");
+        label.set_alignment(0, 0.5);
+        vbox.add(label);
+
+        label = new Gtk.Label();
+        label.set_markup("Notification interval in seconds");
+        label.set_alignment(0, 0.5);
+        vbox.add(label);
+
+        spin = Gtk.SpinButton.new_with_range(
+            60,
+            1800,
+            30)
+        spin.set_value(settings.get_int("notify-interval"));
+        spin.connect('notify::value', function(spin) {
+            settings.set_int("notify-interval", spin.get_value_as_int());
+        });
+        vbox.add(spin);
+
+
+        label = new Gtk.Label();
+        //label.set_markup("Show only my issues");
+        label.set_alignment(0, 0.5);
+        vbox.add(label);
 
         check = new Gtk.CheckButton({label:'Show only issues assigned to me'});
         check.active = this._settings.get_boolean("filter-assigned-to-me")
@@ -69,6 +112,10 @@ const OpenErpSettingsWidget = new GObject.Class({
         vbox.add(check);
         check.connect('toggled', Lang.bind(this, this._placeCenterChanged));
 
+        check = new Gtk.CheckButton({label:'Show project name in status area'});
+        check.active = this._settings.get_boolean("show-project-name-in-status")
+        vbox.add(check);
+        check.connect('toggled', Lang.bind(this, this._projectNameStatusChanged));
     },
 
     _hostChanged: function(widget) {
@@ -95,6 +142,11 @@ const OpenErpSettingsWidget = new GObject.Class({
     _placeCenterChanged: function(widget) {
         let val = widget.active;
         this._settings.set_boolean("place-center", val)
+    },
+
+    _projectNameStatusChanged: function(widget) {
+        let val = widget.active;
+        this._settings.set_boolean("show-project-name-in-status", val)
     }
 
 });
