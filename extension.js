@@ -11,6 +11,8 @@ const Gio = imports.gi.Gio;
 const Separator = imports.ui.separator;
 //const Atk = imports.gi.Atk;
 const GLib = imports.gi.GLib;
+const Notify = imports.gi.Notify;
+const MessageTray = imports.ui.messageTray;
 
 
 const ExtensionUtils = imports.misc.extensionUtils;
@@ -244,6 +246,8 @@ const TimeTracker = new Lang.Class({
         this.activityMenuItems = [];
         this.issues = [];
         this.issueMenuItems = [];
+        this.issueMenuItemsById = {};
+        this.activeIssueMenuItem = null;
         this.activeProjectMenuItem = null;
         this.activeProject = null;
         this.activeIssue = null;
@@ -255,9 +259,16 @@ const TimeTracker = new Lang.Class({
         this.trackingBeginTime = null;
         this.reload();
 
+        //NOTIFICATIIONS
+        this.notification = null;
+        this.source = new MessageTray.Source("TimeTracker ", 'preferences-system-time-symbolic');
+        this.notification = new MessageTray.Notification(this.source);
+        Main.messageTray.add(this.source);
+
         //add the timeout
-        GLib.timeout_add_seconds(0, 3, this.onUpdateTimeout, this);
-        GLib.timeout_add_seconds(1, 3*60, this.onSaveTimeout, this);
+        GLib.timeout_add_seconds(0, 5, this.onUpdateTimeout, this);
+        GLib.timeout_add_seconds(1, this.settings.get_int('save-interval'), this.onSaveTimeout, this);
+        GLib.timeout_add_seconds(2, this.settings.get_int('notify-interval'), this.onNotifyTimeout, this);
     },
 
     reload: function(){
@@ -280,6 +291,7 @@ const TimeTracker = new Lang.Class({
 
         this.projectMenuItems = [];
         this.projectArrowItems = [];
+        this.projectMenuItemsById = {};
 
         this.projects = projects;
 
@@ -336,6 +348,7 @@ const TimeTracker = new Lang.Class({
         }
 
         this.activityMenuItems = [];
+        this.activityMenuItemsById = {};
 
         this.activities = activities;
         for(let i=0; i<this.activities.length; i++){
@@ -357,6 +370,9 @@ const TimeTracker = new Lang.Class({
     },
 
     setActiveActivity: function(activityData){
+        if(this.isTracking && this.activeActivity && this.activeActivity["id"] == activityData["id"])
+            return;
+
         this.activeActivity = activityData;
         if(this.activeActivityMenuItem != null){
             this.activeActivityMenuItem.icon.hide();
@@ -364,6 +380,9 @@ const TimeTracker = new Lang.Class({
 
         this.activeActivityMenuItem = this.activityMenuItemsById[this.activeActivity["id"]];
         this.activeActivityMenuItem.icon.show();
+
+        if(this.activeIssue)
+            this.startTracking();
     },
 
 
@@ -377,6 +396,7 @@ const TimeTracker = new Lang.Class({
             this.issueMenuItems[i].destroy();
         }
         this.issueMenuItems = [];
+        this.issueMenuItemsById = {};
 
         let hasIssue = false;
 
@@ -387,10 +407,12 @@ const TimeTracker = new Lang.Class({
             //filter subproject issues
             if(issue['project']['id'] == this.activeProject["id"]){
                 hasIssue = true;
-                let menuItem = new PopupMenu.PopupMenuItem(issue["subject"], {});
+                let menuItem = new Elements.Button("media-playback-start-symbolic", issue["subject"], {style_class: 'time-tracker-issues-btn'});
                 menuItem.issueData = issue;
+                menuItem.icon.hide();
                 this.issueMenuItems.push(menuItem);
                 this.issuesMenu.addMenuItem(menuItem);
+                this.issueMenuItemsById[issue["id"]] = menuItem;
 
                 //listen for click events
                 menuItem.connect('activate', Lang.bind(this, function(widget) {
@@ -408,11 +430,19 @@ const TimeTracker = new Lang.Class({
     },
 
     setActiveIssue: function(issueData){
-        if(this.activeIssue && this.activeIssue["id"] == issueData["id"])
+        if(this.isTracking && this.activeIssue && this.activeIssue["id"] == issueData["id"])
             return;
+
+        if(this.activeIssueMenuItem != null){
+            this.activeIssueMenuItem.icon.hide();
+        }
 
         this.activeIssue = issueData;
         this.activeIssueLabel.label.text = this.activeIssue["subject"];
+
+        this.activeIssueMenuItem = this.issueMenuItemsById[this.activeIssue["id"]]
+        this.activeIssueMenuItem.icon.show();
+
         if(this.activeActivity)
             this.startTracking();
     },
@@ -421,11 +451,24 @@ const TimeTracker = new Lang.Class({
         this.activeTimeEntry = timeEntry;
     },
 
+    notifyActiveIssue: function(title){
+        if(!this.activeIssue)
+            return;
+
+        if(!this.activeActivity)
+            return;
+
+        //if(this.notification)
+        //    this.notification.destroy();
+
+        this.notification.update(title, this.activeIssue["subject"]+" ("+this.activeActivity["name"]+")");
+        //this.notification.setTransient(true);
+        this.source.notify(this.notification);
+    },
+
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     startTracking: function(){
-        log("startTracking");
-
         this.stopTracking();
 
         if(this.activeIssue == null){
@@ -460,6 +503,9 @@ const TimeTracker = new Lang.Class({
         this.trackingBeginTime = new GLib.DateTime();
 
         this.menu.actor.hide();
+
+        //notify
+        this.notifyActiveIssue("started with");
     },
 
     stopTracking: function(){
@@ -486,6 +532,9 @@ const TimeTracker = new Lang.Class({
         this.isTracking = false;
 
         this.trackingBeginTime = null;
+
+        //notify
+        this.notifyActiveIssue("stopped with");
     },
 
 
@@ -525,8 +574,18 @@ const TimeTracker = new Lang.Class({
         return true;
     },
 
+    onNotifyTimeout: function(){
+        if(!timeTracker.isTracking)
+            return true;
+
+        timeTracker.notifyActiveIssue("working on");
+        
+        return true;
+    },
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     destroy: function(){
+        Notify.uninit();
         Main.panel.statusArea.timeTracker.shutdown();
     }
 });

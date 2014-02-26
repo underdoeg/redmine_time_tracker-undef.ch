@@ -1,12 +1,6 @@
-/*
-.time-tracker-menu-bottom-pane, .time-tracker-menu-top-pane{
-    padding: 0px 20px 0px 20px;
+.time-tracker-project-btn{
+    font-weight: bold;
 }
-
-.time-tracker-refresh-btn, .time-tracker-browser-btn, .time-tracker-settings-btn{
-    padding: 3px;
-}
-*/
 
 .time-tracker-active-issue{
     padding-top: 8px;

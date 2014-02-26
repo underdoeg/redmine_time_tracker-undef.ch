@@ -22,5 +22,18 @@
             <summary>Place in Center</summary>
             <description>Place extension in center of status area</description>
         </key>
+
+        <key name="save-interval" type="i">
+            <default>300</default>
+            <summary>Save Interval</summary>
+            <description>Time in seconds</description>
+        </key>
+
+        <key name="notify-interval" type="i">
+            <default>600</default>
+            <summary>Notifications Interval</summary>
+            <description>Time in seconds</description>
+        </key>
+
     </schema>
 </schemalist>
