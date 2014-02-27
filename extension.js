@@ -257,8 +257,8 @@ const TimeTracker = new Lang.Class({
         }));
         bottomPane.add(browserBtn.actor, {expand: false, x_align:St.Align.START});
 
-        let refreshSpacer = new St.Label({text: ' '});
-        bottomPane.add(refreshSpacer, {expand: true});
+        let prefSpacer = new St.Label({text: ' '});
+        bottomPane.add(prefSpacer, {expand: true});
 
         let prefBtn = new Elements.Button('preferences-system-symbolic', null, {style_class: 'time-tracker-settings-btn'});
         prefBtn.connect('activate', Lang.bind(this, function() {
@@ -324,6 +324,17 @@ const TimeTracker = new Lang.Class({
         GLib.timeout_add_seconds(0, 5, this.onUpdateTimeout, this);
         GLib.timeout_add_seconds(1, this.settings.get_int('save-interval'), this.onSaveTimeout, this);
         GLib.timeout_add_seconds(2, this.settings.get_int('notify-interval'), this.onNotifyTimeout, this);
+    },
+
+    updateActiveIssueLabel: function(){
+        let txt = "";
+        if(this.activeProject)
+            txt += this.activeProject["name"]+": ";
+        if(this.activeIssue)
+            txt += this.activeIssue["subject"];
+        if(this.activeActivity)
+            txt += " ("+this.activeActivity["name"]+")";
+        this.activeIssueLabel.label.text = txt;
     },
 
     reload: function(){
@@ -472,6 +483,8 @@ const TimeTracker = new Lang.Class({
 
         if(this.activeIssue)
             this.startTracking();
+
+        //this.updateActiveIssueLabel();
     },
 
 
@@ -524,13 +537,15 @@ const TimeTracker = new Lang.Class({
         }
 
         this.activeIssue = issueData;
-        this.activeIssueLabel.label.text = this.activeIssue["subject"];
+
 
         this.activeIssueMenuItem = this.issueMenuItemsById[this.activeIssue["id"]]
         this.activeIssueMenuItem.setOrnament(Ornament.CHECK);
 
         if(this.activeActivity)
             this.startTracking();
+
+        //this.updateActiveIssueLabel();
     },
 
     setActiveTimeEntry: function(timeEntry){
@@ -588,6 +603,8 @@ const TimeTracker = new Lang.Class({
         this.trackingBeginTime = new GLib.DateTime();
 
         this.menu.actor.hide();
+
+        this.updateActiveIssueLabel();
 
         //notify
         this.notifyActiveIssue("started with");
