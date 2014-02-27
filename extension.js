@@ -353,7 +353,6 @@ const TimeTracker = new Lang.Class({
     setProjectList: function(projects){
         for(let i=0; i<this.projectMenuItems.length; i++){
             this.projectMenuItems[i].destroy();
-            this.projectArrowItems[i].destroy();
         }
 
         this.projectMenuItems = [];
