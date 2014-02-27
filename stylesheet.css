@@ -6,19 +6,13 @@
     padding-top: 8px;
 }
 
-.time-tracker-active-project{
-    text-decoration: underline;
-}
-
-.time-tracker-arrow-project-btn{
-    padding-right: 5px;
-    padding-left: 0px;
-}
-
 .time-tracker-message {
     font-size: 55px;
     font-weight: bold;
     color: #ffffff;
     background-color: #222;
     padding: .6em;
+}
+
+.time-tracker-activity-entry{
 }

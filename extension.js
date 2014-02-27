@@ -24,7 +24,7 @@ const convenience = Me.imports.convenience;
 const Ornament = {
     NONE: 0,
     DOT: 1,
-    CHECK: 2,
+    CHECK: 2
 };
 
 function _onVertSepRepaint (area)
@@ -136,7 +136,10 @@ const ProjectButton = new Lang.Class({
 
     _init: function(data){
         this.data = data;
-        this.parent(data["name"], {style_class: 'time-tracker-project-btn'});
+        let style_class = 'time-tracker-project-btn';
+        if(data["parent"])
+            style_class = 'time-tracker-subproject-btn';
+        this.parent(data["name"], {style_class: style_class});
     }
 });
 
@@ -171,6 +174,52 @@ const IssueButton = new Lang.Class({
     }
 });
 
+const EntryMenuItem = new Lang.Class({
+    Name: 'EntryMenuItem',
+    Extends: PopupMenu.PopupBaseMenuItem,
+
+    _init: function(){
+        this.parent({reactive: false});
+        this.entry = new St.Entry({name: 'searchEntry',
+            can_focus: true,
+            track_hover: false,
+            hint_text: _("What are you doing?"),
+            style_class: 'time-tracker-activity-entry',
+            x_expand: true
+        });
+
+        this.actor.add(this.entry);
+        //this.data = data;
+    },
+
+    show: function(){
+        this.actor.show();
+    },
+
+    hide: function(){
+        this.actor.hide();
+    }
+});
+
+//this is an EXTREMLY ugly hack to avoid errors when using a PopupSubMenuMenuItem without a proper parent
+//TODO: find a clean solution for this
+const FakeMenu = new Lang.Class({
+    Name: 'FakeMenu',
+
+    _init: function(actor){
+        this.actor = actor;
+    },
+
+    _getTopMenu: function(){
+        return this;
+    },
+
+    _setOpenedSubMenu: function(){
+
+    },
+
+    close: function(){}
+});
 
 /******************************************************* CONTROLLER ***************************************************/
 const TimeTracker = new Lang.Class({
@@ -197,8 +246,7 @@ const TimeTracker = new Lang.Class({
         let topPane = new St.BoxLayout({ style_class: 'time-tracker-menu-top-pane' });
         let middlePane = new St.BoxLayout({ style_class: 'time-tracker-menu-middle-pane' });
         let bottomPane = new St.BoxLayout({ style_class: 'time-tracker-menu-bottom-pane' });
-        let rightPane = new St.BoxLayout({ name: 'time-tracker-menu-right-pane', style_class: 'time-tracker-right-box', vertical:true });
-
+        //let rightPane = new St.BoxLayout({ name: 'time-tracker-menu-right-pane', style_class: 'time-tracker-right-box', vertical:true });
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////build the top pane
         //this.activeIssueLabel = new St.Label({text: 'No issue selected!'});
@@ -215,29 +263,48 @@ const TimeTracker = new Lang.Class({
         this.trackingSwitch.label.hide();
         topPane.add(this.trackingSwitch.actor, {expand: false, x_align:St.Align.END});
 
+        this.mainBox.add_actor(topPane, {expand: false});
+
+        ///////////////////////////////////////////////////////////////////////////////////////////////////activity description
+        this.activityDescription = new EntryMenuItem();
+        this.activityDescription.hide();
+        this.mainBox.add(this.activityDescription.actor, {expand: true});
+
+        let separator = new Separator.HorizontalSeparator({ style_class: 'popup-separator-menu-item' });
+        this.mainBox.add_actor(separator.actor);
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////build the middle pane
         this.projectsMenu = new PopupMenu.PopupMenuSection();
+        let fakeMenu = new FakeMenu(this.projectsMenu.actor);
+        //hack to avoid error on open submenu
+        this.projectsMenu._setParent(fakeMenu);
         middlePane.add(this.projectsMenu.actor, {expand: false, x_align:St.Align.START});
 
         let separator = new St.DrawingArea({ style_class: 'calendar-vertical-separator', pseudo_class: 'highlighted' });
         separator.connect('repaint', Lang.bind(this, _onVertSepRepaint));
         middlePane.add(separator);
 
-        this.activitiesMenu = new PopupMenu.PopupMenuSection();
-        rightPane.add(this.activitiesMenu.actor, {expand: false, x_align:St.Align.START});
+        let activitiesAndIssuesMenu = new PopupMenu.PopupMenuSection();
+        fakeMenu = new FakeMenu(activitiesAndIssuesMenu.actor);
+        //hack to avoid error on open submenu
+        activitiesAndIssuesMenu._setParent(fakeMenu);
+        this.activitiesMenu = new PopupMenu.PopupSubMenuMenuItem("Activities", false);
+        activitiesAndIssuesMenu.addMenuItem(this.activitiesMenu);
+        //rightPane.add(this.activitiesMenuParent.actor, {expand: false, x_align:St.Align.START});
 
         let separator = new PopupMenu.PopupSeparatorMenuItem();
-        rightPane.add(separator.actor);
+        activitiesAndIssuesMenu.addMenuItem(separator);
+        //rightPane.add(separator.actor);
 
         this.issuesMenu = new PopupMenu.PopupMenuSection();
+        activitiesAndIssuesMenu.addMenuItem(this.issuesMenu);
         /*
          this.issuesMenuScroll = new St.ScrollView({ x_fill: true, y_fill: true, y_align: St.Align.START, style_class: 'time-tracker-projects-scroll-container' });
          this.issuesMenuScroll.add_child(this.issuesMenu.actor);
          middlePane.add(this.issuesMenuScroll, {expand: true, x_align:St.Align.START});
          */
-        rightPane.add(this.issuesMenu.actor, {expand: true, x_align:St.Align.START});
-        middlePane.add(rightPane, {expand: true, x_align:St.Align.START});
+        //rightPane.add(this.issuesMenu.actor, {expand: true, x_align:St.Align.START});
+        middlePane.add(activitiesAndIssuesMenu.actor, {expand: true, x_align:St.Align.START});
 
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////build the bottom pane
@@ -269,9 +336,6 @@ const TimeTracker = new Lang.Class({
 
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////build the menu
-        this.mainBox.add_actor(topPane, {expand: false});
-        let separator = new Separator.HorizontalSeparator({ style_class: 'popup-separator-menu-item' });
-        this.mainBox.add_actor(separator.actor);
 
         this.mainBox.add_actor(middlePane, {expand: false, x_align:St.Align.START});
         separator = new Separator.HorizontalSeparator({ style_class: 'popup-separator-menu-item' });
@@ -332,7 +396,9 @@ const TimeTracker = new Lang.Class({
             txt += this.activeProject["name"]+": ";
         if(this.activeIssue)
             txt += this.activeIssue["subject"];
-        if(this.activeActivity)
+        else
+            txt += "...";
+        if(this.activeIssue && this.activeActivity)
             txt += " ("+this.activeActivity["name"]+")";
         this.activeIssueLabel.label.text = txt;
     },
@@ -367,7 +433,6 @@ const TimeTracker = new Lang.Class({
         }
 
         this.projectMenuItems = [];
-        this.projectArrowItems = [];
         this.projectMenuItemsById = {};
 
         this.projects = projects;
@@ -430,6 +495,11 @@ const TimeTracker = new Lang.Class({
     },
 
     setActiveProject: function(projectData){
+        if(this.activeProject && this.activeProject["id"] == projectData["id"])
+            return;
+
+        this.setActiveIssue(null);
+
         this.activeProject = projectData;
         this.loadIssues(projectData["id"]);
         if(this.activeProjectMenuItem != null){
@@ -440,6 +510,7 @@ const TimeTracker = new Lang.Class({
             return;
         widget.setOrnament(Ornament.DOT);
         timeTracker.activeProjectMenuItem = widget;
+        this.updateActiveIssueLabel();
     },
 
 
@@ -456,7 +527,7 @@ const TimeTracker = new Lang.Class({
         for(let i=0; i<this.activities.length; i++){
             let activity = this.activities[i];
             let menuItem = new ActivityButton(activity);
-            this.activitiesMenu.addMenuItem(menuItem);
+            this.activitiesMenu.menu.addMenuItem(menuItem);
             this.activityMenuItemsById[activity["id"]] = menuItem;
             this.activityMenuItems.push(menuItem);
 
@@ -478,6 +549,8 @@ const TimeTracker = new Lang.Class({
             this.activeActivityMenuItem.setOrnament(Ornament.NONE);
         }
 
+        this.activitiesMenu.label.text = "Activities ("+this.activeActivity["name"]+")";
+        this.activitiesMenu.setSubmenuShown(false);
         this.activeActivityMenuItem = this.activityMenuItemsById[this.activeActivity["id"]];
         this.activeActivityMenuItem.setOrnament(Ornament.CHECK);
 
@@ -529,6 +602,11 @@ const TimeTracker = new Lang.Class({
     },
 
     setActiveIssue: function(issueData){
+        if(!issueData){
+            this.activeIssue = null;
+            this.updateActiveIssueLabel();
+            return;
+        }
         if(this.isTracking && this.activeIssue && this.activeIssue["id"] == issueData["id"])
             return;
 
@@ -602,12 +680,14 @@ const TimeTracker = new Lang.Class({
 
         this.trackingBeginTime = new GLib.DateTime();
 
-        this.menu.actor.hide();
-
         this.updateActiveIssueLabel();
 
+        //show the activity entry
+        this.activityDescription.entry.text = "";
+        this.activityDescription.show();
+
         //notify
-        this.notifyActiveIssue("started with");
+        this.notifyActiveIssue("started");
     },
 
     stopTracking: function(){
@@ -615,6 +695,8 @@ const TimeTracker = new Lang.Class({
 
         if(!this.isTracking)
             return;
+
+        this.activeTimeEntry["comments"] = this.activityDescription.entry.text;
 
         //check if the timeEntry is long enough or kill otherwise
         if(this.activeTimeEntry["hours"] < 0.01)
@@ -635,10 +717,12 @@ const TimeTracker = new Lang.Class({
 
         this.trackingBeginTime = null;
 
-        //notify
-        this.notifyActiveIssue("stopped with");
-    },
+        this.activityDescription.entry.text = "";
+        this.activityDescription.hide();
 
+        //notify
+        this.notifyActiveIssue("stopped");
+    },
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     onUpdateTimeout: function(){
@@ -654,6 +738,8 @@ const TimeTracker = new Lang.Class({
         let elapsed = getTimeSince(timeTracker.trackingBeginTime);
         timeTracker.activeTimeEntry["hours"] = elapsed["hours"];
         timeTracker.indicator.time.text = getTimeString(elapsed);
+
+        timeTracker.activeTimeEntry["comments"] = timeTracker.activityDescription.entry.text;
 
         return true;
     },

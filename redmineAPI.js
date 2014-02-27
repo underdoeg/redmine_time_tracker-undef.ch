@@ -106,7 +106,7 @@ function createTimeEntry(issueId, activityId, callback){
 
 function updateTimeEntry(timeEntry, callback){
     let url = new Url('time_entries/'+timeEntry["id"]+'.json');
-    let data = {'time_entry':{issue_id:timeEntry["issue"]["id"], activity_id: timeEntry["activity"]["id"], hours: timeEntry["hours"]}};
+    let data = {'time_entry':{issue_id:timeEntry["issue"]["id"], activity_id: timeEntry["activity"]["id"], hours: timeEntry["hours"], comments: timeEntry["comments"]}};
     let dataStr = JSON.stringify(data);
     let request = Soup.Message.new('PUT', url.toString());
     request.set_request("application/json", Soup.MemoryUse.COPY, dataStr, dataStr.length);
