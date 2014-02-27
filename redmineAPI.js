@@ -106,7 +106,7 @@ function createTimeEntry(issueId, activityId, callback){
 
 function updateTimeEntry(timeEntry, callback){
     let url = new Url('time_entries/'+timeEntry["id"]+'.json');
-    let data = {'time_entry':{issue_id:timeEntry["issue"]["id"], activity_id: timeEntry["activity"]["id"], hours: timeEntry["hours"], comments: timeEntry["comments"]}};
+    let data = {time_entry:{issue_id:timeEntry["issue"]["id"], activity_id: timeEntry["activity"]["id"], hours: timeEntry["hours"], comments: timeEntry["comments"]}};
     let dataStr = JSON.stringify(data);
     let request = Soup.Message.new('PUT', url.toString());
     request.set_request("application/json", Soup.MemoryUse.COPY, dataStr, dataStr.length);
@@ -122,5 +122,16 @@ function deleteTimeEntry(timeEntry, callback){
     session.queue_message(request, function() {
         log(request.response_body.data);
         callback();
+    });
+}
+
+function createIssue(data, callback){
+    let url = new Url('issues.json');
+    let dataStr = JSON.stringify({issue:{project_id:data["project_id"], assigned_to_id: data["assigned_to_id"], subject: data["subject"]}});
+    let request = Soup.Message.new('POST', url.toString());
+    request.set_request("application/json", Soup.MemoryUse.COPY, dataStr, dataStr.length);
+    session.queue_message(request, function() {
+       //log(request.response_body.data);
+        callback(JSON.parse(request.response_body.data)['issue']);
     });
 }

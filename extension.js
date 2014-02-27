@@ -174,6 +174,7 @@ const IssueButton = new Lang.Class({
     }
 });
 
+var entryMenuItemDefault = "What are you doing?";
 const EntryMenuItem = new Lang.Class({
     Name: 'EntryMenuItem',
     Extends: PopupMenu.PopupBaseMenuItem,
@@ -183,13 +184,39 @@ const EntryMenuItem = new Lang.Class({
         this.entry = new St.Entry({name: 'searchEntry',
             can_focus: true,
             track_hover: false,
-            hint_text: _("What are you doing?"),
+            hint_text: entryMenuItemDefault,
             style_class: 'time-tracker-activity-entry',
             x_expand: true
         });
 
         this.actor.add(this.entry);
         //this.data = data;
+    },
+
+    show: function(){
+        this.actor.show();
+    },
+
+    hide: function(){
+        this.actor.hide();
+    }
+});
+
+const CreateIssueMenuItem = new Lang.Class({
+    Name: 'EntryMenuItem',
+    Extends: PopupMenu.PopupBaseMenuItem,
+
+    _init: function(){
+        this.parent({reactive: false});
+        this.entry = new St.Entry({name: 'searchEntry',
+            can_focus: true,
+            track_hover: false,
+            hint_text: _("Create new Issue"),
+            style_class: 'time-tracker-create-issue-entry',
+            x_expand: true
+        });
+
+        this.actor.add(this.entry);
     },
 
     show: function(){
@@ -298,6 +325,18 @@ const TimeTracker = new Lang.Class({
 
         this.issuesMenu = new PopupMenu.PopupMenuSection();
         activitiesAndIssuesMenu.addMenuItem(this.issuesMenu);
+
+        this.createIssueEntry = new CreateIssueMenuItem();
+        activitiesAndIssuesMenu.addMenuItem(this.createIssueEntry);
+        //this.createIssueEntry.hide();
+        this.createIssueEntry.entry.clutter_text.connect('key-release-event', function(textItem, evt){
+            let symbol = evt.get_key_symbol();
+            let txt = textItem.get_text();
+            if(symbol == Clutter.Return){
+                timeTracker.createIssue(txt);
+            }
+        });
+
         /*
          this.issuesMenuScroll = new St.ScrollView({ x_fill: true, y_fill: true, y_align: St.Align.START, style_class: 'time-tracker-projects-scroll-container' });
          this.issuesMenuScroll.add_child(this.issuesMenu.actor);
@@ -404,6 +443,11 @@ const TimeTracker = new Lang.Class({
     },
 
     reload: function(){
+        this.stopTracking();
+
+        this.activityDescription.hide();
+        this.createIssueEntry.hide();
+
         this.activeActivity = null;
         this.activeProject = null;
         this.activeIssue = null;
@@ -416,7 +460,6 @@ const TimeTracker = new Lang.Class({
         if(this.openProjectParent)
             this.openProjectParent.setSubmenuShown(false);
 
-        this.stopTracking();
         //load user data first and then the rest
         API.getCurrentUser(function(user){
             timeTracker.user = user;
@@ -424,7 +467,6 @@ const TimeTracker = new Lang.Class({
             API.getAllActivities(function(activities){timeTracker.setActivitiesList(activities);});
         });
     },
-
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     setProjectList: function(projects){
@@ -498,7 +540,7 @@ const TimeTracker = new Lang.Class({
         if(this.activeProject && this.activeProject["id"] == projectData["id"])
             return;
 
-        this.setActiveIssue(null);
+
 
         this.activeProject = projectData;
         this.loadIssues(projectData["id"]);
@@ -510,7 +552,12 @@ const TimeTracker = new Lang.Class({
             return;
         widget.setOrnament(Ornament.DOT);
         timeTracker.activeProjectMenuItem = widget;
-        this.updateActiveIssueLabel();
+
+        if(!this.isTracking){
+            this.createIssueEntry.show();
+            this.updateActiveIssueLabel();
+            this.setActiveIssue(null);
+        }
     },
 
 
@@ -557,6 +604,7 @@ const TimeTracker = new Lang.Class({
         if(this.activeIssue)
             this.startTracking();
 
+
         //this.updateActiveIssueLabel();
     },
 
@@ -582,15 +630,7 @@ const TimeTracker = new Lang.Class({
             //filter subproject issues
             if(issue['project']['id'] == this.activeProject["id"]){
                 hasIssue = true;
-                let menuItem = new IssueButton(issue);
-                this.issueMenuItems.push(menuItem);
-                this.issuesMenu.addMenuItem(menuItem);
-                this.issueMenuItemsById[issue["id"]] = menuItem;
-
-                //listen for click events
-                menuItem.connect('activate', Lang.bind(this, function(widget) {
-                    timeTracker.setActiveIssue(issue);
-                }));
+                this.addIssue(issue);
             }
         }
 
@@ -599,10 +639,37 @@ const TimeTracker = new Lang.Class({
             this.issueMenuItems.push(empty);
             this.issuesMenu.addMenuItem(empty);
         }
+
+        this.createIssueEntry.show();
+    },
+
+    addIssue: function(issue){
+        let menuItem = new IssueButton(issue);
+        this.issueMenuItems.push(menuItem);
+        this.issuesMenu.addMenuItem(menuItem);
+        this.issueMenuItemsById[issue["id"]] = menuItem;
+
+        //listen for click events
+        menuItem.connect('activate', Lang.bind(this, function(widget) {
+            timeTracker.setActiveIssue(issue);
+        }));
+    },
+
+    createIssue: function(issueSubject){
+        if(!this.activeProject)
+            return;
+
+        this.createIssueEntry.entry.text = "";
+        API.createIssue({project_id: this.activeProject["id"], subject: issueSubject, assigned_to_id: this.user["id"]}, function(issueData){
+            //timeTracker.loadIssues(timeTracker.activeProject["id"]);
+            timeTracker.addIssue(issueData);
+            //timeTracker.setActiveIssue(issueData);
+        });
     },
 
     setActiveIssue: function(issueData){
         if(!issueData){
+            this.stopTracking();
             this.activeIssue = null;
             this.updateActiveIssueLabel();
             return;
@@ -622,8 +689,6 @@ const TimeTracker = new Lang.Class({
 
         if(this.activeActivity)
             this.startTracking();
-
-        //this.updateActiveIssueLabel();
     },
 
     setActiveTimeEntry: function(timeEntry){
@@ -686,6 +751,8 @@ const TimeTracker = new Lang.Class({
         this.activityDescription.entry.text = "";
         this.activityDescription.show();
 
+        this.createIssueEntry.hide();
+
         //notify
         this.notifyActiveIssue("started");
     },
@@ -696,7 +763,9 @@ const TimeTracker = new Lang.Class({
         if(!this.isTracking)
             return;
 
-        this.activeTimeEntry["comments"] = this.activityDescription.entry.text;
+        if(this.activeTimeEntry)
+            if(timeTracker.activityDescription.entry.text != entryMenuItemDefault)
+                this.activeTimeEntry["comments"] = this.activityDescription.entry.text;
 
         //check if the timeEntry is long enough or kill otherwise
         if(this.activeTimeEntry["hours"] < 0.01)
@@ -720,6 +789,9 @@ const TimeTracker = new Lang.Class({
         this.activityDescription.entry.text = "";
         this.activityDescription.hide();
 
+        if(this.activeProject)
+            this.createIssueEntry.show();
+
         //notify
         this.notifyActiveIssue("stopped");
     },
@@ -738,8 +810,8 @@ const TimeTracker = new Lang.Class({
         let elapsed = getTimeSince(timeTracker.trackingBeginTime);
         timeTracker.activeTimeEntry["hours"] = elapsed["hours"];
         timeTracker.indicator.time.text = getTimeString(elapsed);
-
-        timeTracker.activeTimeEntry["comments"] = timeTracker.activityDescription.entry.text;
+        if(timeTracker.activityDescription.entry.text != entryMenuItemDefault)
+            timeTracker.activeTimeEntry["comments"] = timeTracker.activityDescription.entry.text;
 
         return true;
     },
@@ -753,6 +825,9 @@ const TimeTracker = new Lang.Class({
 
         if(!timeTracker.trackingBeginTime)
             return true;
+
+        if(timeTracker.activityDescription.entry.text != entryMenuItemDefault)
+            timeTracker.activeTimeEntry["comments"] = timeTracker.activityDescription.entry.text;
 
         let timePassed =getTimeSince(timeTracker.trackingBeginTime);
         timeTracker.activeTimeEntry["hours"] = timePassed["hours"];
