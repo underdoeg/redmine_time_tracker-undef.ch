@@ -67,11 +67,11 @@ function getTimeString(hms){
         m = "0"+m;
     return h+":"+m;
     /*
-    let s = ""+Math.floor(hms['seconds']);
-    if (s.length < 2)
-        s = "0"+s;
-    return h+":"+m+":"+s;
-    */
+     let s = ""+Math.floor(hms['seconds']);
+     if (s.length < 2)
+     s = "0"+s;
+     return h+":"+m+":"+s;
+     */
 }
 
 //the global TimeTracker object
@@ -137,6 +137,17 @@ const ProjectButton = new Lang.Class({
     _init: function(data){
         this.data = data;
         this.parent(data["name"], {style_class: 'time-tracker-project-btn'});
+    }
+});
+
+const ProjectParentButton = new Lang.Class({
+    Name: 'ProjectParentButton',
+    Extends: PopupMenu.PopupSubMenuMenuItem,
+
+    _init: function(data){
+        this.data = data;
+        this.parent(data["name"], false);
+        this.label.style_class = 'time-tracker-project-btn';
     }
 });
 
@@ -221,10 +232,10 @@ const TimeTracker = new Lang.Class({
 
         this.issuesMenu = new PopupMenu.PopupMenuSection();
         /*
-        this.issuesMenuScroll = new St.ScrollView({ x_fill: true, y_fill: true, y_align: St.Align.START, style_class: 'time-tracker-projects-scroll-container' });
-        this.issuesMenuScroll.add_child(this.issuesMenu.actor);
-        middlePane.add(this.issuesMenuScroll, {expand: true, x_align:St.Align.START});
-        */
+         this.issuesMenuScroll = new St.ScrollView({ x_fill: true, y_fill: true, y_align: St.Align.START, style_class: 'time-tracker-projects-scroll-container' });
+         this.issuesMenuScroll.add_child(this.issuesMenu.actor);
+         middlePane.add(this.issuesMenuScroll, {expand: true, x_align:St.Align.START});
+         */
         rightPane.add(this.issuesMenu.actor, {expand: true, x_align:St.Align.START});
         middlePane.add(rightPane, {expand: true, x_align:St.Align.START});
 
@@ -284,6 +295,7 @@ const TimeTracker = new Lang.Class({
         this.projects = [];
         this.projectMenuItems = [];
         this.projectMenuItemsById = {};
+        this.openProjectParent = null;
         this.activities = [];
         this.activityMenuItemsById = {};
         this.activityMenuItems = [];
@@ -315,6 +327,18 @@ const TimeTracker = new Lang.Class({
     },
 
     reload: function(){
+        this.activeActivity = null;
+        this.activeProject = null;
+        this.activeIssue = null;
+        if(this.activeIssueMenuItem)
+            this.activeIssueMenuItem.setOrnament(Ornament.NONE);
+        if(this.activeProjectMenuItem)
+            this.activeProjectMenuItem.setOrnament(Ornament.NONE);
+        if(this.activeActivityMenuItem)
+            this.activeActivityMenuItem.setOrnament(Ornament.NONE);
+        if(this.openProjectParent)
+            this.openProjectParent.setSubmenuShown(false);
+
         this.stopTracking();
         //load user data first and then the rest
         API.getCurrentUser(function(user){
@@ -338,19 +362,60 @@ const TimeTracker = new Lang.Class({
 
         this.projects = projects;
 
+        //store additional information about child/parent relations in data
         for(let i=0; i<this.projects.length; i++){
             let project = this.projects[i];
-            let menuItem = new ProjectButton(project);
+            if(project["parent"]){
+                let parentId = project["parent"]["id"];
+                for(let j=0; j<this.projects.length; j++){
+                    if(this.projects[j]["id"] == parentId){
+                        this.projects[j]["hasChild"] = true;
+                    }
+                }
+            }
+        }
 
-            //bind to click event
+        //create projects
+        let childProjects = [];
+        for(let i=0; i<this.projects.length; i++){
+            let project = this.projects[i];
+
+            //add child projects later
+            if(!project["parent"]){
+
+                let menuItem = null;
+                if(project["hasChild"]){
+                    menuItem = new ProjectParentButton(project);
+                    menuItem.menu.connect('open-state-changed', Lang.bind(this, function(widget) {
+                        if(timeTracker.openProjectParent)
+                            timeTracker.openProjectParent.setSubmenuShown(false);
+                        timeTracker.openProjectParent = menuItem;
+                        timeTracker.setActiveProject(project);
+                    }));
+                }else{
+                    menuItem = new ProjectButton(project);
+                    menuItem.connect('activate', Lang.bind(this, function(widget) {
+                        timeTracker.setActiveProject(project);
+                    }));
+                }
+                this.projectMenuItemsById[project["id"]] = menuItem;
+                this.projectMenuItems.push(menuItem);
+                this.projectsMenu.addMenuItem(menuItem);
+            }else{
+                childProjects.push(project);
+            }
+        }
+
+        //now build the submenu projects
+        for(let i=0; i<childProjects.length; i++){
+            let project = childProjects[i];
+            let menuItem = new ProjectButton(project);
             menuItem.connect('activate', Lang.bind(this, function(widget) {
                 timeTracker.setActiveProject(project);
             }));
-
-
-            this.projectMenuItemsById[project["id"]] = menuItem;
             this.projectMenuItems.push(menuItem);
-            this.projectsMenu.addMenuItem(menuItem);
+            this.projectMenuItemsById[project["id"]] = menuItem;
+            this.projectMenuItemsById[project["parent"]["id"]].menu.addMenuItem(menuItem);
         }
     },
 
@@ -480,11 +545,7 @@ const TimeTracker = new Lang.Class({
         if(!this.activeActivity)
             return;
 
-        //if(this.notification)
-        //    this.notification.destroy();
-
         this.notification.update(title, this.activeIssue["subject"]+" ("+this.activeActivity["name"]+")");
-        //this.notification.setTransient(true);
         this.source.notify(this.notification);
     },
 
@@ -604,7 +665,7 @@ const TimeTracker = new Lang.Class({
             return true;
 
         timeTracker.notifyActiveIssue("working on");
-        
+
         return true;
     },
 

@@ -95,6 +95,26 @@ const OpenErpSettingsWidget = new GObject.Class({
         });
         vbox.add(spin);
 
+        label = new Gtk.Label();
+        //label.set_markup("Show only my issues");
+        label.set_alignment(0, 0.5);
+        vbox.add(label);
+
+        label = new Gtk.Label();
+        label.set_markup("Width of popup in percent of screen size (TODO)");
+        label.set_alignment(0, 0.5);
+        vbox.add(label);
+
+        spin = Gtk.SpinButton.new_with_range(
+            30,
+            100,
+            5)
+        spin.set_value(settings.get_int("notify-interval"));
+        spin.connect('notify::value', function(spin) {
+            //settings.set_int("notify-interval", spin.get_value_as_int());
+        });
+        vbox.add(spin);
+
 
         label = new Gtk.Label();
         //label.set_markup("Show only my issues");
