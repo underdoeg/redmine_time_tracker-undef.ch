@@ -21,6 +21,12 @@ const API = Me.imports.redmineAPI;
 const Elements = Me.imports.elements;
 const convenience = Me.imports.convenience;
 
+const Ornament = {
+    NONE: 0,
+    DOT: 1,
+    CHECK: 2,
+};
+
 function _onVertSepRepaint (area)
 {
     let cr = area.get_context();
@@ -113,6 +119,47 @@ const TimeTrackerIndicator = new Lang.Class({
     }
 });
 
+/********************************************************* BUTTONS ****************************************************/
+
+const BaseButton = new Lang.Class({
+    Name: 'BaseButton',
+    Extends: PopupMenu.PopupMenuItem,
+
+    _init: function(title, data){
+        this.parent(title, data);
+    }
+});
+
+const ProjectButton = new Lang.Class({
+    Name: 'ProjectButton',
+    Extends: BaseButton,
+
+    _init: function(data){
+        this.data = data;
+        this.parent(data["name"], {style_class: 'time-tracker-project-btn'});
+    }
+});
+
+const ActivityButton = new Lang.Class({
+    Name: 'ProjectButton',
+    Extends: BaseButton,
+
+    _init: function(data){
+        this.data = data;
+        this.parent(data["name"], {style_class: 'time-tracker-activity-btn'});
+    }
+});
+
+const IssueButton = new Lang.Class({
+    Name: 'ProjectButton',
+    Extends: BaseButton,
+
+    _init: function(data){
+        this.data = data;
+        this.parent(data["subject"], {style_class: 'time-tracker-issue-btn'});
+    }
+});
+
 
 /******************************************************* CONTROLLER ***************************************************/
 const TimeTracker = new Lang.Class({
@@ -161,9 +208,6 @@ const TimeTracker = new Lang.Class({
         ///////////////////////////////////////////////////////////////////////////////////////////////////build the middle pane
         this.projectsMenu = new PopupMenu.PopupMenuSection();
         middlePane.add(this.projectsMenu.actor, {expand: false, x_align:St.Align.START});
-
-        this.projectsArrowMenu = new PopupMenu.PopupMenuSection();
-        middlePane.add(this.projectsArrowMenu.actor, {expand: false, x_align:St.Align.START});
 
         let separator = new St.DrawingArea({ style_class: 'calendar-vertical-separator', pseudo_class: 'highlighted' });
         separator.connect('repaint', Lang.bind(this, _onVertSepRepaint));
@@ -239,7 +283,6 @@ const TimeTracker = new Lang.Class({
         this.isTracking = false;
         this.projects = [];
         this.projectMenuItems = [];
-        this.projectArrowItems = [];
         this.projectMenuItemsById = {};
         this.activities = [];
         this.activityMenuItemsById = {};
@@ -297,31 +340,15 @@ const TimeTracker = new Lang.Class({
 
         for(let i=0; i<this.projects.length; i++){
             let project = this.projects[i];
-            let menuItem = new Elements.Button(null, project["name"], {style_class: 'time-tracker-project-btn'});
-
-            //add a separate menu arrow item
-            let menuArrowItem = new Elements.Button("media-playlist-consecutive-symbolic", " ", {style_class: 'time-tracker-arrow-project-btn', reactive: false});
-            menuArrowItem._ornamentLabel.hide();
-            menuArrowItem.icon.hide();
-            menuArrowItem.actor.set_width(22);
-            menuItem.arrow = menuArrowItem;
-            menuItem.projectData = project;
-
-            //also highlite the arrow item
-            menuItem.connect('active-changed', Lang.bind(this, function(widget) {
-                if(widget.actor.has_style_pseudo_class("active"))
-                    widget.arrow.actor.add_style_pseudo_class('active');
-                else
-                    widget.arrow.actor.remove_style_pseudo_class('active');
-            }));
+            let menuItem = new ProjectButton(project);
 
             //bind to click event
             menuItem.connect('activate', Lang.bind(this, function(widget) {
-                timeTracker.setActiveProject(widget.projectData);
+                timeTracker.setActiveProject(project);
             }));
+
+
             this.projectMenuItemsById[project["id"]] = menuItem;
-            this.projectsArrowMenu.addMenuItem(menuArrowItem);
-            this.projectArrowItems.push(menuArrowItem);
             this.projectMenuItems.push(menuItem);
             this.projectsMenu.addMenuItem(menuItem);
         }
@@ -331,12 +358,12 @@ const TimeTracker = new Lang.Class({
         this.activeProject = projectData;
         this.loadIssues(projectData["id"]);
         if(this.activeProjectMenuItem != null){
-            this.activeProjectMenuItem.arrow.icon.hide();
+            this.activeProjectMenuItem.setOrnament(false);
         }
         let widget = this.projectMenuItemsById[projectData["id"]];
         if(!widget)
             return;
-        widget.arrow.icon.show();
+        widget.setOrnament(Ornament.DOT);
         timeTracker.activeProjectMenuItem = widget;
     },
 
@@ -353,15 +380,13 @@ const TimeTracker = new Lang.Class({
         this.activities = activities;
         for(let i=0; i<this.activities.length; i++){
             let activity = this.activities[i];
-            let menuItem = new Elements.Button("media-playback-start-symbolic", activity["name"], {style_class: 'time-tracker-activities-btn'});
-            menuItem.activityData = activity;
-            menuItem.icon.hide();
+            let menuItem = new ActivityButton(activity);
             this.activitiesMenu.addMenuItem(menuItem);
             this.activityMenuItemsById[activity["id"]] = menuItem;
             this.activityMenuItems.push(menuItem);
 
             menuItem.connect('activate', Lang.bind(this, function(widget) {
-                timeTracker.setActiveActivity(widget.activityData);
+                timeTracker.setActiveActivity(activity);
             }));
 
             if(activity["is_default"])
@@ -375,11 +400,11 @@ const TimeTracker = new Lang.Class({
 
         this.activeActivity = activityData;
         if(this.activeActivityMenuItem != null){
-            this.activeActivityMenuItem.icon.hide();
+            this.activeActivityMenuItem.setOrnament(Ornament.NONE);
         }
 
         this.activeActivityMenuItem = this.activityMenuItemsById[this.activeActivity["id"]];
-        this.activeActivityMenuItem.icon.show();
+        this.activeActivityMenuItem.setOrnament(Ornament.CHECK);
 
         if(this.activeIssue)
             this.startTracking();
@@ -407,16 +432,14 @@ const TimeTracker = new Lang.Class({
             //filter subproject issues
             if(issue['project']['id'] == this.activeProject["id"]){
                 hasIssue = true;
-                let menuItem = new Elements.Button("media-playback-start-symbolic", issue["subject"], {style_class: 'time-tracker-issues-btn'});
-                menuItem.issueData = issue;
-                menuItem.icon.hide();
+                let menuItem = new IssueButton(issue);
                 this.issueMenuItems.push(menuItem);
                 this.issuesMenu.addMenuItem(menuItem);
                 this.issueMenuItemsById[issue["id"]] = menuItem;
 
                 //listen for click events
                 menuItem.connect('activate', Lang.bind(this, function(widget) {
-                    timeTracker.setActiveIssue(widget.issueData);
+                    timeTracker.setActiveIssue(issue);
                 }));
             }
         }
@@ -425,7 +448,6 @@ const TimeTracker = new Lang.Class({
             let empty = new PopupMenu.PopupMenuItem("empty", {reactive:false, activate:false});
             this.issueMenuItems.push(empty);
             this.issuesMenu.addMenuItem(empty);
-            return;
         }
     },
 
@@ -434,14 +456,14 @@ const TimeTracker = new Lang.Class({
             return;
 
         if(this.activeIssueMenuItem != null){
-            this.activeIssueMenuItem.icon.hide();
+            this.activeIssueMenuItem.setOrnament(Ornament.NONE);
         }
 
         this.activeIssue = issueData;
         this.activeIssueLabel.label.text = this.activeIssue["subject"];
 
         this.activeIssueMenuItem = this.issueMenuItemsById[this.activeIssue["id"]]
-        this.activeIssueMenuItem.icon.show();
+        this.activeIssueMenuItem.setOrnament(Ornament.CHECK);
 
         if(this.activeActivity)
             this.startTracking();
