@@ -27,6 +27,14 @@ const Ornament = {
     CHECK: 2
 };
 
+function openURL(uri){
+    Gio.app_info_launch_default_for_uri(
+        uri,
+        global.create_app_launch_context()
+    );
+    timeTracker.menu.close();
+}
+
 function _onVertSepRepaint (area)
 {
     let cr = area.get_context();
@@ -140,6 +148,17 @@ const ProjectButton = new Lang.Class({
         if(data["parent"])
             style_class = 'time-tracker-subproject-btn';
         this.parent(data["name"], {style_class: style_class});
+    },
+
+    //override the default release event to catch left clicks
+    _onButtonReleaseEvent: function(actor, event){
+        let button = event.get_button();
+        if(button == 3 || button == 2){
+            openURL(timeTracker.settings.get_string('host')+"projects/"+this.data["id"]);
+        }else{
+            this.activate(event);
+        }
+        return true;
     }
 });
 
@@ -151,6 +170,17 @@ const ProjectParentButton = new Lang.Class({
         this.data = data;
         this.parent(data["name"], false);
         this.label.style_class = 'time-tracker-project-btn';
+    },
+
+    //override the default release event to catch left clicks
+    _onButtonReleaseEvent: function(actor, event){
+        let button = event.get_button();
+        if(button == 3 || button == 2){
+            openURL(timeTracker.settings.get_string('host')+"projects/"+this.data["id"]);
+        }else{
+            this.activate(event);
+        }
+        return true;
     }
 });
 
@@ -162,6 +192,8 @@ const ActivityButton = new Lang.Class({
         this.data = data;
         this.parent(data["name"], {style_class: 'time-tracker-activity-btn'});
     }
+
+
 });
 
 const IssueButton = new Lang.Class({
@@ -172,23 +204,21 @@ const IssueButton = new Lang.Class({
         this.data = data;
         this.parent(data["subject"], {style_class: 'time-tracker-issue-btn'});
 
-        /*
-        this.icon = new St.Icon({
-            icon_name: 'media-playback-pause-symbolic',
-            style_class: 'system-status-icon'
-        });
-
-        this.actor.add(this.icon);
-
-        this.icon.connect('button_release_event', Lang.bind(this, function(event) {
-            log("GUGUS");
-        }));
-        return;
-        */
         //listen for click events
         this.connect('activate', Lang.bind(this, function(event) {
             timeTracker.setActiveIssue(event.data);
         }));
+    },
+
+    //override the default release event to catch left clicks
+    _onButtonReleaseEvent: function(actor, event){
+        let button = event.get_button();
+        if(button == 3 || button == 2){
+            openURL(timeTracker.settings.get_string('host')+"issues/"+this.data["id"]);
+        }else{
+            this.activate(event);
+        }
+        return true;
     }
 });
 
@@ -393,11 +423,7 @@ const TimeTracker = new Lang.Class({
 
         let browserBtn = new Elements.Button('network-server-symbolic', null, {style_class: 'time-tracker-browser-btn'});
         browserBtn.connect('activate', Lang.bind(this, function() {
-            Gio.app_info_launch_default_for_uri(
-                timeTracker.settings.get_string('host'),
-                global.create_app_launch_context()
-            );
-            timeTracker.menu.close();
+            openURL(timeTracker.settings.get_string('host'));
         }));
         bottomPane.add(browserBtn.actor, {expand: false, x_align:St.Align.START});
 
@@ -698,6 +724,7 @@ const TimeTracker = new Lang.Class({
 
         if(!hasIssue){
             let empty = new PopupMenu.PopupMenuItem("empty", {reactive:false, activate:false});
+            empty.setSensitive(false);
             this.issueMenuItems.push(empty);
             this.issuesMenu.addMenuItem(empty);
         }
