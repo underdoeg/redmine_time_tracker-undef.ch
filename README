@@ -1,2 +1,2 @@
-to install:
-git clone gitlab@188.226.128.54:undef/redmine-gnome-shell-extension.git ~/.local/share/gnome-shell/extensions/time_tracker@undef.ch
+# INSTALLATION
+git clone https://github.com/underdoeg/redmine_time_tracker-undef.ch.git ~/.local/share/gnome-shell/extensions/redmine_time_tracker@undef.ch
