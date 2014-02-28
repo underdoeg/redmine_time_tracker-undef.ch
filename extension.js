@@ -928,8 +928,6 @@ const TimeTracker = new Lang.Class({
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     showSearch: function(){
-        if(this.searchIsVisible)
-            return;
 
         this.clearSearch();
         //this.searchMenu.actor.set_height(this.middlePane.get_height());
