@@ -10,9 +10,9 @@ const Convenience = Me.imports.convenience;
 
 let settings;
 
-const OpenErpSettingsWidget = new GObject.Class({
-    Name: 'UndefTimeTracker.Prefs.RedmineSettings',
-    GTypeName: 'RedmineSettingsWidget',
+const RedmineTimeTrackerSettingsWidget = new GObject.Class({
+    Name: 'RedmineTimeTracker.Prefs',
+    GTypeName: 'RedmineTimeTrackerSettings',
     Extends: Gtk.VBox,
 
     _init : function(params) {
@@ -99,7 +99,7 @@ const OpenErpSettingsWidget = new GObject.Class({
         //label.set_markup("Show only my issues");
         label.set_alignment(0, 0.5);
         vbox.add(label);
-
+/*
         label = new Gtk.Label();
         label.set_markup("Width of popup in percent of screen size (TODO)");
         label.set_alignment(0, 0.5);
@@ -114,7 +114,7 @@ const OpenErpSettingsWidget = new GObject.Class({
             //settings.set_int("notify-interval", spin.get_value_as_int());
         });
         vbox.add(spin);
-
+*/
 
         label = new Gtk.Label();
         //label.set_markup("Show only my issues");
@@ -176,7 +176,7 @@ function init() {
 }
 
 function buildPrefsWidget() {
-    let widget = new OpenErpSettingsWidget();
+    let widget = new RedmineTimeTrackerSettingsWidget();
     widget.show_all();
 
     return widget;

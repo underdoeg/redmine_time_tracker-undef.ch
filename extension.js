@@ -165,12 +165,30 @@ const ActivityButton = new Lang.Class({
 });
 
 const IssueButton = new Lang.Class({
-    Name: 'ProjectButton',
+    Name: 'IssueButton',
     Extends: BaseButton,
 
     _init: function(data){
         this.data = data;
         this.parent(data["subject"], {style_class: 'time-tracker-issue-btn'});
+
+        /*
+        this.icon = new St.Icon({
+            icon_name: 'media-playback-pause-symbolic',
+            style_class: 'system-status-icon'
+        });
+
+        this.actor.add(this.icon);
+
+        this.icon.connect('button_release_event', Lang.bind(this, function(event) {
+            log("GUGUS");
+        }));
+        return;
+        */
+        //listen for click events
+        this.connect('activate', Lang.bind(this, function(event) {
+            timeTracker.setActiveIssue(event.data);
+        }));
     }
 });
 
@@ -203,7 +221,7 @@ const EntryMenuItem = new Lang.Class({
 });
 
 const CreateIssueMenuItem = new Lang.Class({
-    Name: 'EntryMenuItem',
+    Name: 'CreateIssueMenuItem',
     Extends: PopupMenu.PopupBaseMenuItem,
 
     _init: function(){
@@ -225,6 +243,24 @@ const CreateIssueMenuItem = new Lang.Class({
 
     hide: function(){
         this.actor.hide();
+    }
+});
+
+const SearchMenuItem = new Lang.Class({
+    Name: 'SearchMenuItem',
+    Extends: PopupMenu.PopupBaseMenuItem,
+
+    _init: function(){
+        this.parent({reactive: false});
+        this.entry = new St.Entry({name: 'searchEntry',
+            can_focus: true,
+            track_hover: false,
+            hint_text: _("Search"),
+            style_class: 'time-tracker-search-entry',
+            x_expand: true
+        });
+
+        this.actor.add(this.entry);
     }
 });
 
@@ -307,27 +343,29 @@ const TimeTracker = new Lang.Class({
         this.projectsMenu._setParent(fakeMenu);
         middlePane.add(this.projectsMenu.actor, {expand: false, x_align:St.Align.START});
 
-        let separator = new St.DrawingArea({ style_class: 'calendar-vertical-separator', pseudo_class: 'highlighted' });
-        separator.connect('repaint', Lang.bind(this, _onVertSepRepaint));
-        middlePane.add(separator);
+        ///////////////////////////////////////////////////
+        this.projectsAndIssuesSeparator = new St.DrawingArea({ style_class: 'calendar-vertical-separator', pseudo_class: 'highlighted' });
+        this.projectsAndIssuesSeparator.connect('repaint', Lang.bind(this, _onVertSepRepaint));
+        middlePane.add(this.projectsAndIssuesSeparator);
 
-        let activitiesAndIssuesMenu = new PopupMenu.PopupMenuSection();
-        fakeMenu = new FakeMenu(activitiesAndIssuesMenu.actor);
+        ///////////////////////////////////////////////////
+        this.activitiesAndIssuesMenu = new PopupMenu.PopupMenuSection();
+        fakeMenu = new FakeMenu(this.activitiesAndIssuesMenu.actor);
         //hack to avoid error on open submenu
-        activitiesAndIssuesMenu._setParent(fakeMenu);
+        this.activitiesAndIssuesMenu._setParent(fakeMenu);
         this.activitiesMenu = new PopupMenu.PopupSubMenuMenuItem("Activities", false);
-        activitiesAndIssuesMenu.addMenuItem(this.activitiesMenu);
+        this.activitiesAndIssuesMenu.addMenuItem(this.activitiesMenu);
         //rightPane.add(this.activitiesMenuParent.actor, {expand: false, x_align:St.Align.START});
 
         let separator = new PopupMenu.PopupSeparatorMenuItem();
-        activitiesAndIssuesMenu.addMenuItem(separator);
+        this.activitiesAndIssuesMenu.addMenuItem(separator);
         //rightPane.add(separator.actor);
 
         this.issuesMenu = new PopupMenu.PopupMenuSection();
-        activitiesAndIssuesMenu.addMenuItem(this.issuesMenu);
+        this.activitiesAndIssuesMenu.addMenuItem(this.issuesMenu);
 
         this.createIssueEntry = new CreateIssueMenuItem();
-        activitiesAndIssuesMenu.addMenuItem(this.createIssueEntry);
+        this.activitiesAndIssuesMenu.addMenuItem(this.createIssueEntry);
         //this.createIssueEntry.hide();
         this.createIssueEntry.entry.clutter_text.connect('key-release-event', function(textItem, evt){
             let symbol = evt.get_key_symbol();
@@ -343,7 +381,7 @@ const TimeTracker = new Lang.Class({
          middlePane.add(this.issuesMenuScroll, {expand: true, x_align:St.Align.START});
          */
         //rightPane.add(this.issuesMenu.actor, {expand: true, x_align:St.Align.START});
-        middlePane.add(activitiesAndIssuesMenu.actor, {expand: true, x_align:St.Align.START});
+        middlePane.add(this.activitiesAndIssuesMenu.actor, {expand: true, x_align:St.Align.START});
 
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////build the bottom pane
@@ -368,7 +406,7 @@ const TimeTracker = new Lang.Class({
 
         let prefBtn = new Elements.Button('preferences-system-symbolic', null, {style_class: 'time-tracker-settings-btn'});
         prefBtn.connect('activate', Lang.bind(this, function() {
-            Main.Util.trySpawnCommandLine("gnome-shell-extension-prefs time_tracker@undef.ch");
+            Main.Util.trySpawnCommandLine("gnome-shell-extension-prefs redmine_time_tracker@undef.ch");
             timeTracker.menu.close();
         }));
         bottomPane.add(prefBtn.actor, {expand: false, x_align:St.Align.END});
@@ -447,6 +485,8 @@ const TimeTracker = new Lang.Class({
 
         this.activityDescription.hide();
         this.createIssueEntry.hide();
+        this.activitiesAndIssuesMenu.actor.show();
+        this.projectsAndIssuesSeparator.show();
 
         this.activeActivity = null;
         this.activeProject = null;
@@ -465,17 +505,34 @@ const TimeTracker = new Lang.Class({
             timeTracker.user = user;
             API.getAllProjects(function(projects){timeTracker.setProjectList(projects);});
             API.getAllActivities(function(activities){timeTracker.setActivitiesList(activities);});
+        }, function(error){
+            timeTracker.setProjectListError();
         });
     },
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    setProjectList: function(projects){
+    clearProjectList: function(){
         for(let i=0; i<this.projectMenuItems.length; i++){
             this.projectMenuItems[i].destroy();
         }
 
         this.projectMenuItems = [];
         this.projectMenuItemsById = {};
+    },
+
+    setProjectListError: function(){
+        this.clearProjectList();
+
+        let empty = new Elements.Button("dialog-error-symbolic", "Error loading projects. Check your preferences.", {style_class: "time-tracker-project-load-error", reactive:false, activate:false});
+        this.projectMenuItems.push(empty);
+        this.projectsMenu.addMenuItem(empty);
+
+        this.activitiesAndIssuesMenu.actor.hide();
+        this.projectsAndIssuesSeparator.hide();
+    },
+
+    setProjectList: function(projects){
+        this.clearProjectList();
 
         this.projects = projects;
 
@@ -540,8 +597,6 @@ const TimeTracker = new Lang.Class({
         if(this.activeProject && this.activeProject["id"] == projectData["id"])
             return;
 
-
-
         this.activeProject = projectData;
         this.loadIssues(projectData["id"]);
         if(this.activeProjectMenuItem != null){
@@ -550,7 +605,13 @@ const TimeTracker = new Lang.Class({
         let widget = this.projectMenuItemsById[projectData["id"]];
         if(!widget)
             return;
+
+        //Gnome 3.6 & 3.8
+        //if(typeof menuItem.setShowDot === "function")
+        //    widget.setShowDot(true);
+        //else
         widget.setOrnament(Ornament.DOT);
+
         timeTracker.activeProjectMenuItem = widget;
 
         if(!this.isTracking){
@@ -581,6 +642,7 @@ const TimeTracker = new Lang.Class({
             menuItem.connect('activate', Lang.bind(this, function(widget) {
                 timeTracker.setActiveActivity(activity);
             }));
+
 
             if(activity["is_default"])
                 this.setActiveActivity(activity);
@@ -648,11 +710,6 @@ const TimeTracker = new Lang.Class({
         this.issueMenuItems.push(menuItem);
         this.issuesMenu.addMenuItem(menuItem);
         this.issueMenuItemsById[issue["id"]] = menuItem;
-
-        //listen for click events
-        menuItem.connect('activate', Lang.bind(this, function(widget) {
-            timeTracker.setActiveIssue(issue);
-        }));
     },
 
     createIssue: function(issueSubject){
@@ -847,9 +904,9 @@ const TimeTracker = new Lang.Class({
     },
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    destroy: function(){
+    shutdown: function(){
         Notify.uninit();
-        Main.panel.statusArea.timeTracker.shutdown();
+        this.destroy();
     }
 });
 
@@ -863,5 +920,5 @@ function enable() {
 }
 
 function disable() {
-    timeTracker.destroy();
+    timeTracker.shutdown();
 }

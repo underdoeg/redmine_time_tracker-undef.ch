@@ -36,12 +36,16 @@ Url.prototype = {
 
 }
 
-function getCurrentUser(callback){
+function getCurrentUser(callbackOK, callbackError){
     let url = new Url('users/current.json');
     let request = Soup.Message.new('GET',url.toString());
     session.queue_message(request, function() {
-        let user = JSON.parse(request.response_body.data)['user'];
-        callback(user);
+        if(request.status_code != 200){
+            callbackError(request.status_code);
+        }else{
+            let user = JSON.parse(request.response_body.data)['user'];
+            callbackOK(user);
+        }
     })
 }
 
