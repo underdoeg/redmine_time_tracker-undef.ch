@@ -42,5 +42,8 @@
             <description>Show the project name and not the current Issue in the status area</description>
         </key>
 
+        <key type="as" name="show-search-shortcut">
+            <default><![CDATA[['<Super>I']]]></default>
+        </key>
     </schema>
 </schemalist>

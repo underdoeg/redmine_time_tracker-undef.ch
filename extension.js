@@ -6,6 +6,7 @@ const Lang = imports.lang;
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
 const Main = imports.ui.main;
+const Meta = imports.gi.Meta;
 const Clutter = imports.gi.Clutter;
 const Gio = imports.gi.Gio;
 const Separator = imports.ui.separator;
@@ -13,6 +14,8 @@ const Separator = imports.ui.separator;
 const GLib = imports.gi.GLib;
 const Notify = imports.gi.Notify;
 const MessageTray = imports.ui.messageTray;
+const Shell = imports.gi.Shell;
+
 
 
 const ExtensionUtils = imports.misc.extensionUtils;
@@ -148,6 +151,7 @@ const ProjectButton = new Lang.Class({
         if(data["parent"])
             style_class = 'time-tracker-subproject-btn';
         this.parent(data["name"], {style_class: style_class});
+        this.actor.x_expand = false;
     },
 
     //override the default release event to catch left clicks
@@ -156,9 +160,24 @@ const ProjectButton = new Lang.Class({
         if(button == 3 || button == 2){
             openURL(timeTracker.settings.get_string('host')+"projects/"+this.data["id"]);
         }else{
+            timeTracker.setActiveProject(this.data);
             this.activate(event);
         }
         return true;
+    },
+
+    setChecked: function(state){
+        //Gnome 3.6 & 3.8
+        if(typeof this.setShowDot === "function") {
+            this.setShowDot(state);
+        }
+        //Gnome 3.10 & newer
+        if(typeof this.setOrnament === "function") {
+            if(state)
+                this.setOrnament(Ornament.DOT);
+            else
+                this.setOrnament(Ornament.NONE);
+        }
     }
 });
 
@@ -170,6 +189,7 @@ const ProjectParentButton = new Lang.Class({
         this.data = data;
         this.parent(data["name"], false);
         this.label.style_class = 'time-tracker-project-btn';
+        this.actor.x_expand = false;
     },
 
     //override the default release event to catch left clicks
@@ -178,9 +198,24 @@ const ProjectParentButton = new Lang.Class({
         if(button == 3 || button == 2){
             openURL(timeTracker.settings.get_string('host')+"projects/"+this.data["id"]);
         }else{
+            timeTracker.setActiveProject(this.data);
             this.activate(event);
         }
         return true;
+    },
+
+    setChecked: function(state){
+        //Gnome 3.6 & 3.8
+        if(typeof this.setShowDot === "function") {
+            this.setShowDot(state);
+        }
+        //Gnome 3.10 & newer
+        if(typeof this.setOrnament === "function") {
+            if(state)
+                this.setOrnament(Ornament.DOT);
+            else
+                this.setOrnament(Ornament.NONE);
+        }
     }
 });
 
@@ -191,9 +226,21 @@ const ActivityButton = new Lang.Class({
     _init: function(data){
         this.data = data;
         this.parent(data["name"], {style_class: 'time-tracker-activity-btn'});
+    },
+
+    setChecked: function(state){
+        //Gnome 3.6 & 3.8
+        if(typeof this.setShowDot === "function") {
+            this.setShowDot(state);
+        }
+        //Gnome 3.10 & newer
+        if(typeof this.setOrnament === "function") {
+            if(state)
+                this.setOrnament(Ornament.CHECK);
+            else
+                this.setOrnament(Ornament.NONE);
+        }
     }
-
-
 });
 
 const IssueButton = new Lang.Class({
@@ -219,6 +266,20 @@ const IssueButton = new Lang.Class({
             this.activate(event);
         }
         return true;
+    },
+
+    setChecked: function(state){
+        //Gnome 3.6 & 3.8
+        if(typeof this.setShowDot === "function") {
+            this.setShowDot(state);
+        }
+        //Gnome 3.10 & newer
+        if(typeof this.setOrnament === "function") {
+            if(state)
+                this.setOrnament(Ornament.CHECK);
+            else
+                this.setOrnament(Ornament.NONE);
+        }
     }
 });
 
@@ -281,7 +342,7 @@ const SearchMenuItem = new Lang.Class({
     Extends: PopupMenu.PopupBaseMenuItem,
 
     _init: function(){
-        this.parent({reactive: false});
+        this.parent({reactive: false, activate: false});
         this.entry = new St.Entry({name: 'searchEntry',
             can_focus: true,
             track_hover: false,
@@ -290,7 +351,25 @@ const SearchMenuItem = new Lang.Class({
             x_expand: true
         });
 
+        this.entry.connect('key_release_event', Lang.bind(this, function(actor, event) {
+            //log(actor.text);
+            timeTracker.searchFor(actor.text);
+        }));
+
         this.actor.add(this.entry);
+    },
+    /*
+     _onKeyPressEvent: function(actor, event){
+     log(event.get_key_symbol());
+     },
+     */
+
+    clear: function(){
+        this.entry.text = "";
+    },
+
+    focus: function(){
+        this.entry.grab_key_focus();
     }
 });
 
@@ -337,7 +416,8 @@ const TimeTracker = new Lang.Class({
 
         this.mainBox = new St.BoxLayout({ name: 'timeTrackerMainBox', style_class: 'time-tracker-menu-box', vertical:true });
         let topPane = new St.BoxLayout({ style_class: 'time-tracker-menu-top-pane' });
-        let middlePane = new St.BoxLayout({ style_class: 'time-tracker-menu-middle-pane' });
+        this.middlePane = new St.BoxLayout({ style_class: 'time-tracker-menu-middle-pane', x_expand: true, y_expand: true});
+
         let bottomPane = new St.BoxLayout({ style_class: 'time-tracker-menu-bottom-pane' });
         //let rightPane = new St.BoxLayout({ name: 'time-tracker-menu-right-pane', style_class: 'time-tracker-right-box', vertical:true });
 
@@ -371,12 +451,14 @@ const TimeTracker = new Lang.Class({
         let fakeMenu = new FakeMenu(this.projectsMenu.actor);
         //hack to avoid error on open submenu
         this.projectsMenu._setParent(fakeMenu);
-        middlePane.add(this.projectsMenu.actor, {expand: false, x_align:St.Align.START});
+        this.projectsMenu.actor.x_expand = false;
+        this.projectsMenu.actor.y_expand = false;
+        this.middlePane.add(this.projectsMenu.actor, {x_expand: false, y_expand: false});
 
         ///////////////////////////////////////////////////
         this.projectsAndIssuesSeparator = new St.DrawingArea({ style_class: 'calendar-vertical-separator', pseudo_class: 'highlighted' });
         this.projectsAndIssuesSeparator.connect('repaint', Lang.bind(this, _onVertSepRepaint));
-        middlePane.add(this.projectsAndIssuesSeparator);
+        this.middlePane.add(this.projectsAndIssuesSeparator, {expand: false});
 
         ///////////////////////////////////////////////////
         this.activitiesAndIssuesMenu = new PopupMenu.PopupMenuSection();
@@ -411,10 +493,25 @@ const TimeTracker = new Lang.Class({
          middlePane.add(this.issuesMenuScroll, {expand: true, x_align:St.Align.START});
          */
         //rightPane.add(this.issuesMenu.actor, {expand: true, x_align:St.Align.START});
-        middlePane.add(this.activitiesAndIssuesMenu.actor, {expand: true, x_align:St.Align.START});
+        this.middlePane.add(this.activitiesAndIssuesMenu.actor, {expand: true, x_align:St.Align.START});
+
+        this.mainBox.add_actor(this.middlePane, {expand: true, x_align:St.Align.START});
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////search area
+        this.searchMenu = new PopupMenu.PopupMenuSection({ style_class: 'time-tracker-search-pane' });
+        this.searchEntry = new SearchMenuItem();
+        this.searchMenu.addMenuItem(this.searchEntry);
+        this.mainBox.add(this.searchMenu.actor);
+        this.searchMenu.actor.hide();
 
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////build the bottom pane
+        let searchBtn = new Elements.Button('preferences-system-search-symbolic', null, {style_class: 'time-tracker-refresh-btn'});
+        searchBtn.connect('activate', Lang.bind(this, function() {
+            timeTracker.toggleSearch();
+        }));
+        bottomPane.add(searchBtn.actor);
+
         let refreshBtn = new Elements.Button('view-refresh-symbolic', null, {style_class: 'time-tracker-refresh-btn'});
         refreshBtn.connect('activate', Lang.bind(this, function() {
             timeTracker.reload();
@@ -439,8 +536,6 @@ const TimeTracker = new Lang.Class({
 
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////build the menu
-
-        this.mainBox.add_actor(middlePane, {expand: false, x_align:St.Align.START});
         separator = new Separator.HorizontalSeparator({ style_class: 'popup-separator-menu-item' });
         this.mainBox.add_actor(separator.actor);
         this.mainBox.add_actor(bottomPane, {expand: false, x_align:St.Align.START});
@@ -448,7 +543,8 @@ const TimeTracker = new Lang.Class({
         section.actor.add_actor(this.mainBox);
         this.menu.addMenuItem(section);
 
-        this.menu.actor.set_width(560);
+        //this.menu.actor.min_width = 550;
+        this.menu.actor.set_width(640);
 
         //finally add to the status area
         if(this.settings.get_boolean('place-center'))
@@ -467,6 +563,8 @@ const TimeTracker = new Lang.Class({
         this.activityMenuItemsById = {};
         this.activityMenuItems = [];
         this.issues = [];
+        this.allIssues = [];
+        this.searchResults = [];
         this.issueMenuItems = [];
         this.issueMenuItemsById = {};
         this.activeIssueMenuItem = null;
@@ -491,6 +589,18 @@ const TimeTracker = new Lang.Class({
         GLib.timeout_add_seconds(0, 5, this.onUpdateTimeout, this);
         GLib.timeout_add_seconds(1, this.settings.get_int('save-interval'), this.onSaveTimeout, this);
         GLib.timeout_add_seconds(2, this.settings.get_int('notify-interval'), this.onNotifyTimeout, this);
+
+        //register shortcut
+        Main.wm.addKeybinding(
+            "show-search-shortcut",
+            this.settings,
+            Meta.KeyBindingFlags.NONE,
+            Shell.KeyBindingMode.NORMAL | Shell.KeyBindingMode.MESSAGE_TRAY | Shell.KeyBindingMode.OVERVIEW,
+            Lang.bind(this, function() {
+                timeTracker.menu.open();
+                timeTracker.showSearch();
+            })
+        );
     },
 
     updateActiveIssueLabel: function(){
@@ -514,29 +624,46 @@ const TimeTracker = new Lang.Class({
         this.activitiesAndIssuesMenu.actor.show();
         this.projectsAndIssuesSeparator.show();
 
+        this.allIssues = [];
         this.activeActivity = null;
         this.activeProject = null;
         this.activeIssue = null;
         if(this.activeIssueMenuItem)
-            this.activeIssueMenuItem.setOrnament(Ornament.NONE);
+            this.activeIssueMenuItem.setChecked(false);
         if(this.activeProjectMenuItem)
-            this.activeProjectMenuItem.setOrnament(Ornament.NONE);
+            this.activeProjectMenuItem.setChecked(false);
         if(this.activeActivityMenuItem)
-            this.activeActivityMenuItem.setOrnament(Ornament.NONE);
+            this.activeActivityMenuItem.setChecked(false);
         if(this.openProjectParent)
             this.openProjectParent.setSubmenuShown(false);
+
+        this.clearProjectList();
+        this.clearIssueList();
+        let empty = new Elements.Button("view-refresh-symbolic", "loading...", {reactive:false, activate:false, can_focus: false});
+        empty.setSensitive(false);
+        this.projectMenuItems.push(empty);
+        this.projectsMenu.addMenuItem(empty);
 
         //load user data first and then the rest
         API.getCurrentUser(function(user){
             timeTracker.user = user;
             API.getAllProjects(function(projects){timeTracker.setProjectList(projects);});
             API.getAllActivities(function(activities){timeTracker.setActivitiesList(activities);});
+            API.getAllIssues(function(issues){timeTracker.allIssues = issues;});
         }, function(error){
             timeTracker.setProjectListError();
         });
     },
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    getProjectById: function(projectId){
+        for(let i=0; i<this.projects.length; i++){
+            if(this.projects[i]["id"] == projectId)
+                return this.projects[i];
+        }
+        return null;
+    },
+
     clearProjectList: function(){
         for(let i=0; i<this.projectMenuItems.length; i++){
             this.projectMenuItems[i].destroy();
@@ -559,6 +686,9 @@ const TimeTracker = new Lang.Class({
 
     setProjectList: function(projects){
         this.clearProjectList();
+
+        this.projectsMenu.actor.x_expand = false;
+        this.projectsMenu.actor.y_expand = false;
 
         this.projects = projects;
 
@@ -590,13 +720,14 @@ const TimeTracker = new Lang.Class({
                         if(timeTracker.openProjectParent)
                             timeTracker.openProjectParent.setSubmenuShown(false);
                         timeTracker.openProjectParent = menuItem;
-                        timeTracker.setActiveProject(project);
                     }));
                 }else{
                     menuItem = new ProjectButton(project);
-                    menuItem.connect('activate', Lang.bind(this, function(widget) {
-                        timeTracker.setActiveProject(project);
-                    }));
+                    /*
+                     menuItem.connect('activate', Lang.bind(this, function(widget) {
+                     timeTracker.setActiveProject(project);
+                     }));
+                     */
                 }
                 this.projectMenuItemsById[project["id"]] = menuItem;
                 this.projectMenuItems.push(menuItem);
@@ -619,24 +750,20 @@ const TimeTracker = new Lang.Class({
         }
     },
 
-    setActiveProject: function(projectData){
+    setActiveProject: function(projectData, callback){
         if(this.activeProject && this.activeProject["id"] == projectData["id"])
             return;
 
         this.activeProject = projectData;
-        this.loadIssues(projectData["id"]);
+        this.loadIssues(projectData["id"], callback);
         if(this.activeProjectMenuItem != null){
-            this.activeProjectMenuItem.setOrnament(false);
+            this.activeProjectMenuItem.setChecked(false);
         }
         let widget = this.projectMenuItemsById[projectData["id"]];
         if(!widget)
             return;
 
-        //Gnome 3.6 & 3.8
-        //if(typeof menuItem.setShowDot === "function")
-        //    widget.setShowDot(true);
-        //else
-        widget.setOrnament(Ornament.DOT);
+        widget.setChecked(true);
 
         timeTracker.activeProjectMenuItem = widget;
 
@@ -646,7 +773,6 @@ const TimeTracker = new Lang.Class({
             this.setActiveIssue(null);
         }
     },
-
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     setActivitiesList: function(activities){
@@ -681,13 +807,13 @@ const TimeTracker = new Lang.Class({
 
         this.activeActivity = activityData;
         if(this.activeActivityMenuItem != null){
-            this.activeActivityMenuItem.setOrnament(Ornament.NONE);
+            this.activeActivityMenuItem.setChecked(false);
         }
 
         this.activitiesMenu.label.text = "Activities ("+this.activeActivity["name"]+")";
         this.activitiesMenu.setSubmenuShown(false);
         this.activeActivityMenuItem = this.activityMenuItemsById[this.activeActivity["id"]];
-        this.activeActivityMenuItem.setOrnament(Ornament.CHECK);
+        this.activeActivityMenuItem.setChecked(true);
 
         if(this.activeIssue)
             this.startTracking();
@@ -698,16 +824,25 @@ const TimeTracker = new Lang.Class({
 
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    loadIssues: function(projectId){
-        API.getIssuesFromProject(projectId, function(issues){timeTracker.setIssueList(issues);});
+    loadIssues: function(projectId, callback){
+        this.clearIssueList();
+        let empty = new Elements.Button("view-refresh-symbolic", "loading...", {reactive:false, activate:false, can_focus: false});
+        empty.setSensitive(false);
+        this.issueMenuItems.push(empty);
+        this.issuesMenu.addMenuItem(empty);
+        API.getIssuesFromProject(projectId, function(issues){timeTracker.setIssueList(issues);if(callback){callback();}});
     },
 
-    setIssueList: function(issues){
+    clearIssueList: function(){
         for(let i=0; i<this.issueMenuItems.length; i++){
             this.issueMenuItems[i].destroy();
         }
         this.issueMenuItems = [];
         this.issueMenuItemsById = {};
+    },
+
+    setIssueList: function(issues){
+        this.clearIssueList();
 
         let hasIssue = false;
 
@@ -723,7 +858,7 @@ const TimeTracker = new Lang.Class({
         }
 
         if(!hasIssue){
-            let empty = new PopupMenu.PopupMenuItem("empty", {reactive:false, activate:false});
+            let empty = new PopupMenu.PopupMenuItem("empty", {reactive:false, activate:false, can_focus: false});
             empty.setSensitive(false);
             this.issueMenuItems.push(empty);
             this.issuesMenu.addMenuItem(empty);
@@ -746,6 +881,7 @@ const TimeTracker = new Lang.Class({
         this.createIssueEntry.entry.text = "";
         API.createIssue({project_id: this.activeProject["id"], subject: issueSubject, assigned_to_id: this.user["id"]}, function(issueData){
             //timeTracker.loadIssues(timeTracker.activeProject["id"]);
+            timeTracker.allIssues.push(issueData);
             timeTracker.addIssue(issueData);
             //timeTracker.setActiveIssue(issueData);
         });
@@ -762,14 +898,14 @@ const TimeTracker = new Lang.Class({
             return;
 
         if(this.activeIssueMenuItem != null){
-            this.activeIssueMenuItem.setOrnament(Ornament.NONE);
+            this.activeIssueMenuItem.setChecked(false);
         }
 
         this.activeIssue = issueData;
 
 
         this.activeIssueMenuItem = this.issueMenuItemsById[this.activeIssue["id"]]
-        this.activeIssueMenuItem.setOrnament(Ornament.CHECK);
+        this.activeIssueMenuItem.setChecked(true);
 
         if(this.activeActivity)
             this.startTracking();
@@ -790,6 +926,126 @@ const TimeTracker = new Lang.Class({
         this.source.notify(this.notification);
     },
 
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    showSearch: function(){
+        if(this.searchIsVisible)
+            return;
+
+        this.clearSearch();
+        //this.searchMenu.actor.set_height(this.middlePane.get_height());
+        this.middlePane.hide();
+        this.searchMenu.actor.show();
+        this.searchIsVisible = true;
+
+        this.searchEntry.focus();
+        /*
+         for(let i=0;i<20;i++){
+         let empty = new PopupMenu.PopupMenuItem("empty", {reactive:false, activate:false, can_focus: false});
+         empty.setSensitive(false);
+         this.searchMenu.addMenuItem(empty);
+         }
+         */
+    },
+
+    hideSearch: function(){
+        this.searchMenu.actor.hide();
+        this.middlePane.show();
+        this.searchIsVisible = false;
+    },
+
+    toggleSearch: function(){
+        if(this.searchIsVisible){
+            this.hideSearch();
+        }else{
+            this.showSearch();
+        }
+    },
+
+    clearSearch: function(){
+        this.searchEntry.clear();
+    },
+
+    clearSearchResults: function(){
+        for(let i=0; i<this.searchResults.length; i++){
+            this.searchResults[i].destroy();
+        }
+
+        this.searchResults = [];
+    },
+
+    searchFor: function(query){
+        this.clearSearchResults();
+
+        if(query.length < 2)
+            return;
+
+        query = query.toLowerCase();
+
+        let projectSearchResults = [];
+        for(let i=0; i<this.projects.length; i++){
+            if(this.projects[i]["name"].toLowerCase().search(query) != -1){
+                projectSearchResults.push(this.projects[i]);
+            }
+        }
+
+        /*
+         let item = new PopupMenu.PopupMenuItem("PROJECTS", {reactive:false, activate:false, can_focus: false, style_class: "time-tracker-search-title"});
+         this.searchResults.push(item);
+         this.searchMenu.addMenuItem(item);
+         */
+        for(let i=0; i<projectSearchResults.length; i++){
+            let project = projectSearchResults[i];
+            let item = new PopupMenu.PopupMenuItem(project["name"]);
+            item.connect('activate', Lang.bind(this, function(widget) {
+                timeTracker.hideSearch();
+                timeTracker.setActiveProject(project);
+            }));
+            this.searchResults.push(item);
+            this.searchMenu.addMenuItem(item);
+        }
+        if(projectSearchResults.length == 0){
+            let item = new PopupMenu.PopupMenuItem("no projects", {reactive:false, activate:false, can_focus: false, style_class: "time-tracker-search-title"});
+            this.searchResults.push(item);
+            this.searchMenu.addMenuItem(item);
+        }
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        let item = new PopupMenu.PopupSeparatorMenuItem();
+        this.searchResults.push(item);
+        this.searchMenu.addMenuItem(item);
+
+        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        let issueSearchResults = [];
+        for(let i=0; i<this.allIssues.length; i++){
+            if(this.allIssues[i]["subject"].toLowerCase().search(query) != -1 || this.allIssues[i]["project"]["name"].toLowerCase().search(query) != -1){
+                issueSearchResults.push(this.allIssues[i]);
+            }
+        }
+        /*
+         item = new PopupMenu.PopupMenuItem("ISSUES", {reactive:false, activate:false, can_focus: false, style_class: "time-tracker-search-title"});
+         this.searchResults.push(item);
+         this.searchMenu.addMenuItem(item);
+         */
+        for(let i=0; i<issueSearchResults.length; i++){
+            let issue = issueSearchResults[i];
+            if(issue["project"]){
+                let item = new PopupMenu.PopupMenuItem(issue["subject"]+" ("+issue["project"]["name"]+")");
+                item.connect('activate', Lang.bind(this, function(widget) {
+                    timeTracker.hideSearch();
+                    timeTracker.setActiveProject(timeTracker.getProjectById(issue["project"]["id"]), function(){
+                        timeTracker.setActiveIssue(issue);
+                    });
+                }));
+                this.searchResults.push(item);
+                this.searchMenu.addMenuItem(item);
+            }
+        }
+        if(issueSearchResults.length == 0){
+            let item = new PopupMenu.PopupMenuItem("no issues", {reactive:false, activate:false, can_focus: false, style_class: "time-tracker-search-title"});
+            this.searchResults.push(item);
+            this.searchMenu.addMenuItem(item);
+        }
+    },
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     startTracking: function(){
