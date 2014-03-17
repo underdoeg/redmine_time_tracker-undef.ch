@@ -249,7 +249,20 @@ const IssueButton = new Lang.Class({
 
     _init: function(data){
         this.data = data;
-        this.parent(data["subject"], {style_class: 'time-tracker-issue-btn'});
+        let labelTxt = data["subject"];
+        if(data["priority"] != null){
+            if(data["priority"]["name"].toLowerCase() == "immediate"){
+                labelTxt = "♦♦♦ "+labelTxt;
+            }else if(data["priority"]["name"].toLowerCase() == "urgent"){
+                labelTxt = "♦♦ "+labelTxt;
+            }else if(data["priority"]["name"].toLowerCase() == "high"){
+                labelTxt = "♦ "+labelTxt;
+            }
+            /*else if(data["priority"]["name"].toLowerCase() == "normal"){
+                labelTxt = "# "+labelTxt;
+            }*/
+        }
+        this.parent(labelTxt, {style_class: 'time-tracker-issue-btn'});
 
         //listen for click events
         this.connect('activate', Lang.bind(this, function(event) {
