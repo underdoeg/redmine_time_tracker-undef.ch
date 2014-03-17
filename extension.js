@@ -53,7 +53,7 @@ function _onVertSepRepaint (area)
     cr.setLineWidth(stippleWidth);
     cr.stroke();
     cr.$dispose();
-};
+}
 
 function getTimeSince(beginning){
     let timeNow = new GLib.DateTime();
@@ -473,8 +473,16 @@ const TimeTracker = new Lang.Class({
         this.activitiesAndIssuesMenu.addMenuItem(separator);
         //rightPane.add(separator.actor);
 
+        this.issuesMenuMine = new PopupMenu.PopupMenuSection();
+        this.activitiesAndIssuesMenu.addMenuItem(this.issuesMenuMine);
+        this.issuesMineSeparator = new PopupMenu.PopupSeparatorMenuItem();
+        this.activitiesAndIssuesMenu.addMenuItem(this.issuesMineSeparator);
         this.issuesMenu = new PopupMenu.PopupMenuSection();
         this.activitiesAndIssuesMenu.addMenuItem(this.issuesMenu);
+
+        this.issuesMenuMine.actor.hide();
+        this.issuesMineSeparator.actor.hide();
+        this.issuesMenu.actor.hide();
 
         this.createIssueEntry = new CreateIssueMenuItem();
         this.activitiesAndIssuesMenu.addMenuItem(this.createIssueEntry);
@@ -842,18 +850,43 @@ const TimeTracker = new Lang.Class({
     },
 
     setIssueList: function(issues){
+
+        function compareSubject(a,b) {
+            let subjectA = a.subject.toLowerCase();
+            let subjectB = b.subject.toLowerCase();
+            if (subjectA < subjectB)
+                return -1;
+            if (subjectA > subjectB)
+                return 1;
+            return 0;
+        }
+
         this.clearIssueList();
 
         let hasIssue = false;
+        let hasIssueMine = false;
+        let hasIssueOther = false;
+
+        issues.sort(compareSubject);
 
         this.issues = issues;
+
         for(let i=0; i<this.issues.length; i++){
             let issue = this.issues[i];
 
             //filter subproject issues
             if(issue['project']['id'] == this.activeProject["id"]){
                 hasIssue = true;
-                this.addIssue(issue);
+                let mine = false;
+                if(issue['assigned_to'] != null){
+                    if(issue['assigned_to'].id == this.user.id){
+                        mine = true;
+                        hasIssueMine = true;
+                    }
+                }
+                if(!mine)
+                    hasIssueOther = true;
+                this.addIssue(issue, mine);
             }
         }
 
@@ -861,16 +894,35 @@ const TimeTracker = new Lang.Class({
             let empty = new PopupMenu.PopupMenuItem("empty", {reactive:false, activate:false, can_focus: false});
             empty.setSensitive(false);
             this.issueMenuItems.push(empty);
-            this.issuesMenu.addMenuItem(empty);
+            this.issuesMenu.addMenuItem(empty, false);
+        }
+
+        if(hasIssueMine){
+            this.issuesMenuMine.actor.show();
+            this.issuesMineSeparator.actor.show();
+        }else{
+            this.issuesMenuMine.actor.hide();
+            this.issuesMineSeparator.actor.hide();
+        }
+
+        if(hasIssueOther){
+            this.issuesMenu.actor.show();
+        }else{
+            this.issuesMenu.actor.hide();
+            this.issuesMineSeparator.actor.hide();
         }
 
         this.createIssueEntry.show();
     },
 
-    addIssue: function(issue){
+    addIssue: function(issue, mine){
         let menuItem = new IssueButton(issue);
         this.issueMenuItems.push(menuItem);
-        this.issuesMenu.addMenuItem(menuItem);
+        if(mine){
+            this.issuesMenuMine.addMenuItem(menuItem);
+        }else{
+            this.issuesMenu.addMenuItem(menuItem);
+        }
         this.issueMenuItemsById[issue["id"]] = menuItem;
     },
 

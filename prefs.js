@@ -120,7 +120,7 @@ const RedmineTimeTrackerSettingsWidget = new GObject.Class({
         //label.set_markup("Show only my issues");
         label.set_alignment(0, 0.5);
         vbox.add(label);
-
+        
         check = new Gtk.CheckButton({label:'Show only issues assigned to me'});
         check.active = this._settings.get_boolean("filter-assigned-to-me")
         vbox.add(check);
