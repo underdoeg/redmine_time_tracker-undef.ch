@@ -259,8 +259,8 @@ const IssueButton = new Lang.Class({
                 labelTxt = "♦ "+labelTxt;
             }
             /*else if(data["priority"]["name"].toLowerCase() == "normal"){
-                labelTxt = "# "+labelTxt;
-            }*/
+             labelTxt = "# "+labelTxt;
+             }*/
         }
         this.parent(labelTxt, {style_class: 'time-tracker-issue-btn'});
 
@@ -711,7 +711,15 @@ const TimeTracker = new Lang.Class({
         this.projectsMenu.actor.x_expand = false;
         this.projectsMenu.actor.y_expand = false;
 
-        this.projects = projects;
+        //filter closed projects
+        for(let i=0; i<projects.length; i++){
+            let project = projects[i];
+            if(project["status"] == 1){
+                this.projects.push(project);
+            }
+        }
+
+        //this.projects = projects;
 
         //store additional information about child/parent relations in data
         for(let i=0; i<this.projects.length; i++){
