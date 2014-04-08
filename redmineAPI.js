@@ -75,6 +75,7 @@ function getAllIssues(callback){
 function getIssuesFromProject(projectId, callback){
     let data = {};
     data["project_id"] = projectId;
+    data["limit"] = 999;
     //check for filter
     if(this.settings.get_boolean("filter-assigned-to-me"))
         data['assigned_to_id'] = 'me';
