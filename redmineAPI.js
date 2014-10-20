@@ -50,7 +50,9 @@ function getCurrentUser(callbackOK, callbackError){
 }
 
 function getAllProjects(callback){
-    let url = new Url('projects.json');
+    let data = {};
+    data["limit"] = 999;
+    let url = new Url('projects.json', data);
     let request = Soup.Message.new('GET',url.toString());
     session.queue_message(request, function() {
         let projects = JSON.parse(request.response_body.data)['projects'];
