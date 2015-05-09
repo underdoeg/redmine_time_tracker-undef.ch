@@ -610,18 +610,6 @@ const TimeTracker = new Lang.Class({
         GLib.timeout_add_seconds(0, 5, this.onUpdateTimeout, this);
         GLib.timeout_add_seconds(1, this.settings.get_int('save-interval'), this.onSaveTimeout, this);
         GLib.timeout_add_seconds(2, this.settings.get_int('notify-interval'), this.onNotifyTimeout, this);
-
-        //register shortcut
-        Main.wm.addKeybinding(
-            "show-search-shortcut",
-            this.settings,
-            Meta.KeyBindingFlags.NONE,
-            Shell.KeyBindingMode.NORMAL | Shell.KeyBindingMode.MESSAGE_TRAY | Shell.KeyBindingMode.OVERVIEW,
-            Lang.bind(this, function() {
-                timeTracker.menu.open();
-                timeTracker.showSearch();
-            })
-        );
     },
 
     updateActiveIssueLabel: function(){
