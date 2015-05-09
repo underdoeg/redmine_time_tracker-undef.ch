@@ -1,5 +1,5 @@
 {
-    "shell-version": ["3.10", "3.11", "3.12", "3.14"],
+    "shell-version": ["3.10", "3.11", "3.12", "3.14", "3.16"],
     "uuid": "redmine_time_tracker@undef.ch",
     "name": "Redmine Time Tracker",
     "description": "Integrated time tracking for redmine",
