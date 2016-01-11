@@ -616,7 +616,7 @@ const TimeTracker = new Lang.Class({
             "show-search-shortcut",
             this.settings,
             Meta.KeyBindingFlags.NONE,
-            Shell.KeyBindingMode.NORMAL | Shell.KeyBindingMode.MESSAGE_TRAY | Shell.KeyBindingMode.OVERVIEW,
+            Shell.ActionMode.NORMAL | Shell.ActionMode.MESSAGE_TRAY | Shell.ActionMode.OVERVIEW,
             Lang.bind(this, function() {
                 timeTracker.menu.open();
                 timeTracker.showSearch();
