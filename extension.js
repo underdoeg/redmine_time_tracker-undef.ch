@@ -482,7 +482,7 @@ const TimeTracker = new Lang.Class({
         this.activitiesAndIssuesMenu.addMenuItem(this.activitiesMenu);
         //rightPane.add(this.activitiesMenuParent.actor, {expand: false, x_align:St.Align.START});
 
-        let separator = new PopupMenu.PopupSeparatorMenuItem();
+        separator = new PopupMenu.PopupSeparatorMenuItem();
         this.activitiesAndIssuesMenu.addMenuItem(separator);
         //rightPane.add(separator.actor);
 
