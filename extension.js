@@ -9,7 +9,8 @@ const Main = imports.ui.main;
 const Meta = imports.gi.Meta;
 const Clutter = imports.gi.Clutter;
 const Gio = imports.gi.Gio;
-const Separator = imports.ui.separator;
+//const Separator = imports.ui.separator;
+//Nao estava antes - const Me = imports.misc.extensionUtils.getCurrentExtension();
 //const Atk = imports.gi.Atk;
 const GLib = imports.gi.GLib;
 const Notify = imports.gi.Notify;
@@ -17,12 +18,12 @@ const MessageTray = imports.ui.messageTray;
 const Shell = imports.gi.Shell;
 
 
-
 const ExtensionUtils = imports.misc.extensionUtils;
 const Me = ExtensionUtils.getCurrentExtension();
 const API = Me.imports.redmineAPI;
 const Elements = Me.imports.elements;
 const convenience = Me.imports.convenience;
+const Separator = Me.imports.separator;
 
 const Ornament = {
     NONE: 0,
